@@ -272,10 +272,11 @@ async function shot(cdp, name) {
       const active = document.querySelector('#btnManual').classList.contains('active');
       __CL_DEBUG.scene.setSelected(__CL_DEBUG.state.layout.placements[0].seq);
       const p = __CL_DEBUG.state.layout.placements[0];
+      const snap = __CL_DEBUG.scene._snapPosition(p, p.x + 12, p.y + 12);
       const before = { x:p.x, y:p.y, l:p.l, w:p.w };
       const ok = __CL_DEBUG.scene.rotateSelected();
       const after = { x:p.x, y:p.y, l:p.l, w:p.w };
-      return { active, ok, before, after, hint: document.querySelector('.stage-hint').textContent };
+      return { active, snap, ok, before, after, hint: document.querySelector('.stage-hint').textContent };
     })()`);
     await evaluate(cdp, `document.querySelector('#btnManual').click()`);
 

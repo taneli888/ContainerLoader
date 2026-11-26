@@ -127,6 +127,56 @@
     return true;
   };
 
+  // 手动拖动吸附：柜内壁 / 其他托盘边缘，阈值 28mm。
+  Scene.prototype._snapPosition = function (p, rawX, rawY) {
+    var m = this.model;
+    if (!m) return { x: rawX, y: rawY, snapped: false };
+    var SNAP = 28;
+    var xs = [0, m.L - p.l];
+    var ys = [0, m.W - p.w];
+    var yOverlap = function (y0, w, q) {
+      return y0 < q.y + q.w - 1e-6 && q.y < y0 + w - 1e-6;
+    };
+    var xOverlap = function (x0, l, q) {
+      return x0 < q.x + q.l - 1e-6 && q.x < x0 + l - 1e-6;
+    };
+    (m.placements || []).forEach(function (q) {
+      if (q === p) return;
+      if (yOverlap(rawY, p.w, q)) {
+        xs.push(q.x, q.x + q.l, q.x - p.l, q.x + q.l - p.l);
+      }
+      if (xOverlap(rawX, p.l, q)) {
+        ys.push(q.y, q.y + q.w, q.y - p.w, q.y + q.w - p.w);
+      }
+    });
+    function nearest(v, arr, min, max) {
+      var best = v, dist = SNAP + 1;
+      arr.forEach(function (c) {
+        if (c < min - 1e-6 || c > max + 1e-6) return;
+        var d = Math.abs(c - v);
+        if (d <= SNAP && d < dist) { dist = d; best = c; }
+      });
+      return best;
+    }
+    var sx = nearest(rawX, xs, 0, m.L - p.l);
+    var sy = nearest(rawY, ys, 0, m.W - p.w);
+    var snappedX = Math.abs(sx - rawX) > 1e-6;
+    var snappedY = Math.abs(sy - rawY) > 1e-6;
+    // 优先同时吸附，其次单轴，最后原始位置；任何组合都不能碰撞/越界。
+    var tries = [
+      [sx, sy], [rawX, sy], [sx, rawY], [rawX, rawY]
+    ];
+    for (var i = 0; i < tries.length; i++) {
+      if (this._canPlace(p, tries[i][0], tries[i][1], p.l, p.w)) {
+        return {
+          x: tries[i][0], y: tries[i][1],
+          snapped: (Math.abs(tries[i][0] - rawX) > 1e-6 || Math.abs(tries[i][1] - rawY) > 1e-6)
+        };
+      }
+    }
+    return { x: rawX, y: rawY, snapped: false };
+  };
+
   // 屏幕点反投影到 z=0 柜底平面，用于把鼠标拖动映射成真实 X/Y 坐标。
   Scene.prototype._screenToFloor = function (clientX, clientY) {
     var cam = this._camera();
@@ -151,8 +201,15 @@
     var nl = p.w, nw = p.l;
     var cx = p.x + p.l / 2, cy = p.y + p.w / 2;
     var nx = Math.round(cx - nl / 2), ny = Math.round(cy - nw / 2);
-    if (!this._canPlace(p, nx, ny, nl, nw)) return false;
-    p.x = nx; p.y = ny; p.l = nl; p.w = nw;
+    var oldL = p.l, oldW = p.w;
+    p.l = nl; p.w = nw;
+    var sp = this._snapPosition(p, nx, ny);
+    nx = sp.x; ny = sp.y;
+    if (!this._canPlace(p, nx, ny, nl, nw)) {
+      p.l = oldL; p.w = oldW;
+      return false;
+    }
+    p.x = nx; p.y = ny;
     p.baseL = nl; p.baseW = nw;
     p.rotated = !p.rotated;
     if (p.layers && p.layers.length) {
@@ -933,6 +990,10 @@
         var ny = Math.round((self._drag.startFloor.y + (fp.y - self._drag.startFloor.y)) / 10) * 10;
         nx = clamp(nx, 0, self.model.L - pl.l);
         ny = clamp(ny, 0, self.model.W - pl.w);
+        var sp = self._snapPosition(pl, nx, ny);
+        nx = sp.x;
+        ny = sp.y;
+        self._drag.snapped = sp.snapped;
         if (self._canPlace(pl, nx, ny, pl.l, pl.w)) {
           pl.x = nx; pl.y = ny;
           self._drag.blocked = false;

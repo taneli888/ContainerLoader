@@ -702,7 +702,7 @@
     if (rot) rot.hidden = !(state.manualMode && state.selectedSeq);
     var hint = $('.stage-hint');
     if (hint) hint.textContent = state.manualMode
-      ? '拖托盘移动（碰撞/越界会自动挡住）· 空白处旋转视角 · R 旋转 90°'
+      ? '拖托盘移动（靠近内壁/托盘边缘自动吸附；碰撞/越界会挡住）· 空白处旋转视角 · R 旋转 90°'
       : '左键旋转 · 右键/Shift 平移 · 滚轮缩放 · 双击复位';
     if (!silent) toast(state.manualMode ? '手动调整已开启：拖动托盘到空位' : '已退出手动调整');
   }
