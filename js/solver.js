@@ -89,6 +89,37 @@
 
   // 每个托盘都尝试向 X=0（柜底）和 Y=0 顶到不能顶为止。
   // 这是几何紧凑化，不改变层数/数量，也不做任何居中或均分。
+  function promoteSinglesToDoor(placements, L, W) {
+    var lows = placements.filter(function (p) { return p.count === 1; });
+    var highs = placements.filter(function (p) { return p.count > 1; });
+    lows.forEach(function (p) {
+      var yHit = function (q) { return p.y < q.y + q.w - EPS && q.y < p.y + p.w - EPS; };
+      var blockers = highs.filter(function (q) {
+        return yHit(q) && q.x >= p.x + p.l - EPS;
+      }).sort(function (a, b) { return b.x - a.x; });
+      for (var i = 0; i < blockers.length; i++) {
+        var q = blockers[i];
+        if (q.l !== p.l || q.w !== p.w) continue;
+        var px = p.x, py = p.y, qx = q.x, qy = q.y;
+        p.x = qx; p.y = qy; q.x = px; q.y = py;
+        var hit = false;
+        for (var a = 0; a < placements.length && !hit; a++) {
+          var A = placements[a];
+          if (A.x < -EPS || A.y < -EPS || A.x + A.l > L + EPS || A.y + A.w > W + EPS) hit = true;
+          for (var b = a + 1; b < placements.length; b++) {
+            var B = placements[b];
+            if (A.x < B.x + B.l - EPS && B.x < A.x + A.l - EPS &&
+                A.y < B.y + B.w - EPS && B.y < A.y + A.w - EPS) { hit = true; break; }
+          }
+        }
+        if (!hit) return;
+        p.x = px; p.y = py; q.x = qx; q.y = qy;
+      }
+    });
+  }
+
+  // 每个托盘都尝试向 X=0（柜底）和 Y=0 顶到不能顶为止。
+  // 这是几何紧凑化，不改变层数/数量，也不做任何居中或均分。
   function compactPlacements(placements, L, W, preserveSingles) {
     if (!placements.length) return;
     var minX = Infinity, minY = Infinity;
@@ -682,17 +713,40 @@
     });
     orders.push(highUnits.slice().sort(function (a, b) { return b.t.l * b.t.w - a.t.l * a.t.w; }));
     orders.push(highUnits.slice().sort(function (a, b) { return a.t.l * a.t.w - b.t.l * b.t.w; }));
+    // 单元级顺序对 Bottom-Left 很敏感：加一批确定性打乱顺序，帮助在柜门预留单层位。
+    if (lowUnits.length === 1) {
+      for (var seed = 1; seed <= 40; seed++) {
+        var arr = highUnits.slice();
+        var s = seed * 9301 + 49297;
+        for (var k = arr.length - 1; k > 0; k--) {
+          s = (s * 9301 + 49297) % 233280;
+          var j = Math.floor((s / 233280) * (k + 1));
+          var tmp = arr[k]; arr[k] = arr[j]; arr[j] = tmp;
+        }
+        orders.push(arr);
+      }
+    }
 
     var best = null;
-    orders.forEach(function (order) {
-      var highs = packUnitsBottomLeft(order, 0, L, W, P.allowRotate);
-      if (!highs) return;
-      var highEnd = Math.max.apply(null, highs.map(function (p) { return p.x + p.l; }));
-      var lows = packUnitsBottomLeft(lowUnits, highEnd, L, W, P.allowRotate, highs);
-      if (!lows) return;
+    function consider(highs, lows) {
+      if (!highs || !lows) return;
       var placements = highs.concat(lows);
       var gap = bottomGapMetric(placements, L, W);
-      if (!best || gap < best.bottomGap - EPS) {
+      var lowDoor = Infinity;
+      lows.forEach(function (p) { lowDoor = Math.min(lowDoor, L - (p.x + p.l)); });
+      if (!isFinite(lowDoor)) lowDoor = 0;
+      var blocked = 0;
+      lows.forEach(function (l) {
+        highs.some(function (h) {
+          var yHit = l.y < h.y + h.w - EPS && h.y < l.y + l.w - EPS;
+          if (yHit && h.x >= l.x + l.l - EPS) { blocked++; return true; }
+          return false;
+        });
+      });
+      if (!best ||
+          blocked < best.singleBlocked ||
+          (blocked === best.singleBlocked && lowDoor < best.singleDoor - EPS) ||
+          (blocked === best.singleBlocked && Math.abs(lowDoor - best.singleDoor) < EPS && gap < best.bottomGap - EPS)) {
         best = {
           placements: placements,
           fillCount: 0,
@@ -700,10 +754,43 @@
           stackCount: placements.length,
           doorClear: Math.max(0, L - Math.max.apply(null, placements.map(function (p) { return p.x + p.l; }))),
           bottomGap: gap,
+          singleDoor: lowDoor,
+          singleBlocked: blocked,
           score: 4e8,
           stripCount: 1,
           cut: W
         };
+      }
+    }
+
+    orders.forEach(function (order) {
+      var highs = packUnitsBottomLeft(order, 0, L, W, P.allowRotate);
+      if (!highs) return;
+      var highEnd = Math.max.apply(null, highs.map(function (p) { return p.x + p.l; }));
+      var lows = packUnitsBottomLeft(lowUnits, highEnd, L, W, P.allowRotate, highs);
+      consider(highs, lows);
+
+      // 单层只有 1 托时，优先把它固定在柜门边，再把高层垛绕开它排。
+      if (lowUnits.length === 1) {
+        var lu = lowUnits[0];
+        var offsets = [0, 100, 200, 300, 400, 500, 600, 800, 1000, 1200];
+        typeOrientations(lu.t, P.allowRotate).forEach(function (o) {
+          offsets.forEach(function (off) {
+            var lx = L - o.l - off;
+            if (lx < 0) return;
+            var ys2 = [0, W - o.w, (W - o.w) / 2];
+            ys2.forEach(function (ly) {
+              var lp = {
+                typeId: lu.t.id, name: lu.t.name, code: lu.t.code, color: lu.t.color, fill: false,
+                x: lx, y: ly, z: 0, l: o.l, w: o.w, h: lu.t.h, baseH: lu.t.baseH,
+                weight: lu.t.weight, rotated: o.rotated, count: 1, stackHeight: lu.t.h,
+                strip: 'M', order: 0, baseL: o.l, baseW: o.w
+              };
+              var h2 = packUnitsBottomLeft(order, 0, L, W, P.allowRotate, [lp]);
+              if (h2) consider(h2, [lp]);
+            });
+          });
+        });
       }
     });
     return best;
@@ -1069,7 +1156,12 @@
         if (!band) return;
         if (!bestBand ||
             band.fillCount > bestBand.fillCount ||
-            (band.fillCount === bestBand.fillCount && band.bottomGap < bestBand.bottomGap - EPS)) {
+            (band.fillCount === bestBand.fillCount &&
+              (band.singleBlocked < (bestBand.singleBlocked || 0) ||
+               (band.singleBlocked === (bestBand.singleBlocked || 0) &&
+                (band.singleDoor < (bestBand.singleDoor == null ? Infinity : bestBand.singleDoor) - EPS ||
+                 (Math.abs(band.singleDoor - (bestBand.singleDoor == null ? Infinity : bestBand.singleDoor)) < EPS &&
+                  band.bottomGap < bestBand.bottomGap - EPS)))))) {
           bestBand = band;
         }
       });
@@ -1192,6 +1284,7 @@
     // 有叠放垛时，单层垛不再被拉回柜底——单层要留在柜门侧。
     var hasHighStack = best.placements.some(function (p) { return p.count > 1; });
     compactPlacements(best.placements, L, W, hasHighStack);
+    if (hasHighStack) promoteSinglesToDoor(best.placements, L, W);
     var maxX = 0, minX = Infinity;
     best.placements.forEach(function (p) {
       maxX = Math.max(maxX, p.x + p.l);

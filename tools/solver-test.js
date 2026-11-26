@@ -200,5 +200,14 @@ check('WODA 高层紧贴 EUR 高层', twoPlusThree.ok && eurMin2 <= wodaMax + 1,
 check('单层 EUR 在柜门侧', twoPlusThree.ok && singleEur.length === 1 && singleEur[0].x >= wodaMax - 1, twoPlusThree.ok ? JSON.stringify(singleEur.map((p) => [p.x, p.y])) : '');
 check('2组WODA + 3组EUR + 单托EUR = 6垛11托', twoPlusThree.ok && twoPlusThree.stackCount === 6 && twoPlusThree.totalCount === 11, twoPlusThree.ok ? (twoPlusThree.stackCount + '垛/' + twoPlusThree.totalCount + '托') : '');
 
+const woda14 = Object.assign({}, woda, { qty: 14 });
+const eur7b = Object.assign({}, eur2, { qty: 7 });
+const dense = scenario('WODA14 + EUR7：单层 EUR 放柜门最外', c20, [woda14, eur7b], { allowRotate: true, gap: 0, allowStack: true, preferSingle: false, doorGap: 0 });
+validatePlan('DENSE', dense, c20);
+const denseSingle = dense.ok ? dense.placements.filter((p) => p.typeId === 'eur2' && p.count === 1) : [];
+const denseBlocked = dense.ok && denseSingle.some((l) => dense.placements.some((h) => h.count > 1 && l.y < h.y + h.w - 1e-6 && h.y < l.y + l.w - 1e-6 && h.x >= l.x + l.baseL - 1));
+check('WODA14+EUR7 单层 EUR 在柜门最外', dense.ok && denseSingle.length === 1 && denseSingle[0].x >= 5000, dense.ok ? JSON.stringify(denseSingle.map((p) => [p.x, p.y])) : '');
+check('WODA14+EUR7 单层 EUR 后面没有叠放垛', dense.ok && !denseBlocked);
+
 console.log('\n结果：' + passed + ' 通过，' + failed + ' 失败');
 process.exit(failed ? 1 : 0);
