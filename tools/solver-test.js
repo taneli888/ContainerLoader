@@ -62,7 +62,8 @@ check('示例优先不叠放', example.ok && example.stackingUsed === false);
 check('示例达到单层面积上限', example.ok && example.optimalByArea === true);
 check('示例地面利用率约 91.5%', example.ok && Math.abs(example.floorUtil - 0.915) < 0.004, example.ok ? String(example.floorUtil) : '');
 check('示例柜门余量 > 0', example.ok && example.doorClearance > 0, example.ok ? String(example.doorClearance) : '');
-check('示例货物贴紧柜底', example.ok && Math.max(...example.placements.map((p) => p.x + p.baseL)) === 5898, example.ok ? String(Math.max(...example.placements.map((p) => p.x + p.baseL))) : '');
+check('示例贴紧柜底（X=0）', example.ok && Math.min(...example.placements.map((p) => p.x)) === 0, example.ok ? String(Math.min(...example.placements.map((p) => p.x))) : '');
+check('示例剩余空间在柜门侧', example.ok && Math.max(...example.placements.map((p) => p.x + p.baseL)) + example.doorClearance === 5898, example.ok ? String(Math.max(...example.placements.map((p) => p.x + p.baseL)) + '+' + example.doorClearance) : '');
 
 const stackedExample = scenario('20GP 8 EUR + 1120 fill（关闭优先不叠放）', c20, [eur, sq], { allowRotate: true, gap: 0, allowStack: true, preferSingle: false, doorGap: 0 });
 validatePlan('叠放示例', stackedExample, c20);
@@ -135,13 +136,13 @@ const wind = scenario('20GP 20 托 1200×1000 风车', c20, [windP]);
 validatePlan('WIND20', wind, c20);
 check('风车放下 20 托', wind.ok && wind.totalCount === 20, wind.ok ? String(wind.totalCount) : '');
 check('风车为 10 个 2 层垛', wind.ok && wind.stackCount === 10 && wind.maxHeight === 2200, wind.ok ? (wind.stackCount + '垛/' + wind.maxHeight) : '');
-check('风车贴柜底、无柜门余量', wind.ok && wind.doorClearance === 0, wind.ok ? String(wind.doorClearance) : '');
+check('风车贴柜底、余量在柜门', wind.ok && wind.bottomGap === 0 && wind.doorClearance >= 0, wind.ok ? ('底缝' + wind.bottomGap + '/门余' + wind.doorClearance) : '');
 const wind10 = scenario('20GP 10 托 1200×1000 风车单层', c20, [Object.assign({}, windP, { qty: 10 })]);
 check('10 托风车单层优先', wind10.ok && wind10.totalCount === 10 && wind10.stackingUsed === false && wind10.maxHeight === 1100, wind10.ok ? (wind10.stackCount + '垛/' + wind10.maxHeight) : '');
 
 const three = scenario('20GP 3 托 1200×1000 柜底对齐', c20, [{ id: 'e2', name: 'EUR2', code: 'EUR2', l: 1200, w: 1000, h: 1100, baseH: 144, qty: 3, weight: 0, fill: false, color: 0 }]);
 validatePlan('THREE', three, c20);
-check('3 托短通道也贴柜底', three.ok && three.placements.every((p) => Math.abs(p.x + p.baseL - 5898) < 1 || three.placements.some((q) => q !== p && Math.abs(q.x - (p.x + p.baseL)) < 1 && q.y < p.y + p.w && p.y < q.y + q.w)), three.ok ? JSON.stringify(three.placements.map((p) => [p.x, p.y, p.l, p.w])) : '');
+check('3 托短通道也贴柜底', three.ok && three.placements.every((p) => p.x === 0 || three.placements.some((q) => q !== p && Math.abs(q.x + q.baseL - p.x) < 1 && q.y < p.y + p.w && p.y < q.y + q.w)), three.ok ? JSON.stringify(three.placements.map((p) => [p.x, p.y, p.l, p.w])) : '');
 
 console.log('\n结果：' + passed + ' 通过，' + failed + ' 失败');
 process.exit(failed ? 1 : 0);

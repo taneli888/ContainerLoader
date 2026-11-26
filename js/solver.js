@@ -1,5 +1,10 @@
-/*!
+﻿/*!
  * Container Loader — 单层托盘装柜求解器
+ *
+ * 坐标系（与装柜现场一致）：
+ *   X = 0 柜底（封闭端，装载起点），X = L 柜门；
+ *   Y = 0 左侧内壁，Y = W 右侧内壁；Z = 0 柜底，Z = H 柜顶。
+ *   所有 placements 的 x/y 都是毫米级真实几何坐标，不做居中或均分空隙。
  *
  * 问题：给定柜内长宽、若干必装托盘、一个“补柜”规格（数量不限），
  * 在柜底做 2D 矩形排布，先保证必装全部放入，再最大化补柜数量。
@@ -62,6 +67,88 @@
       y1 = Math.max(y1, p.y + p.w);
     }
     return { x0: x0, y0: y0, x1: x1, y1: y1, area: Math.max(0, x1 - x0) * Math.max(0, y1 - y0) };
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* 真实矩形碰撞 + 二次紧凑化                                          */
+  /* X=0 柜底，X=L 柜门；Y=0 左侧内壁，Y=W 右侧内壁。                  */
+  /* ------------------------------------------------------------------ */
+
+  function rectsOverlap(a, b) {
+    return a.x < b.x + b.l - EPS && b.x < a.x + a.l - EPS &&
+      a.y < b.y + b.w - EPS && b.y < a.y + a.w - EPS;
+  }
+
+  function overlapsY(a, b) {
+    return a.y < b.y + b.w - EPS && b.y < a.y + a.w - EPS;
+  }
+
+  function overlapsX(a, b) {
+    return a.x < b.x + b.l - EPS && b.x < a.x + a.l - EPS;
+  }
+
+  // 每个托盘都尝试向 X=0（柜底）和 Y=0 顶到不能顶为止。
+  // 这是几何紧凑化，不改变层数/数量，也不做任何居中或均分。
+  function compactPlacements(placements, L, W) {
+    if (!placements.length) return;
+    var minX = Infinity, minY = Infinity;
+    placements.forEach(function (p) {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+    });
+    if (minX > EPS || minY > EPS) {
+      placements.forEach(function (p) { p.x -= minX; p.y -= minY; });
+    }
+
+    for (var pass = 0; pass < 8; pass++) {
+      var moved = false;
+
+      // X：按当前 x 从柜底向柜门处理，顶到已经固定的托盘或柜底。
+      var byX = placements.slice().sort(function (a, b) {
+        return a.x - b.x || a.y - b.y;
+      });
+      byX.forEach(function (p) {
+        if (p.noAlign) return;
+        var target = 0;
+        placements.forEach(function (q) {
+          if (q === p || !overlapsY(p, q)) return;
+          if (q.x + q.l <= p.x + EPS) target = Math.max(target, q.x + q.l);
+        });
+        if (target < p.x - EPS) {
+          p.x = target;
+          moved = true;
+        }
+      });
+
+      // Y：向左侧内壁靠，顶到已经固定的托盘或内壁。
+      var byY = placements.slice().sort(function (a, b) {
+        return a.y - b.y || a.x - b.x;
+      });
+      byY.forEach(function (p) {
+        if (p.noAlign) return;
+        var target = 0;
+        placements.forEach(function (q) {
+          if (q === p || !overlapsX(p, q)) return;
+          if (q.y + q.w <= p.y + EPS) target = Math.max(target, q.y + q.w);
+        });
+        if (target < p.y - EPS) {
+          p.y = target;
+          moved = true;
+        }
+      });
+
+      if (!moved) break;
+    }
+
+    // 兜底：紧凑化后重新贴到 0，禁止负坐标。
+    var lowX = Infinity, lowY = Infinity;
+    placements.forEach(function (p) {
+      lowX = Math.min(lowX, p.x);
+      lowY = Math.min(lowY, p.y);
+    });
+    if (lowX > EPS || lowY > EPS) {
+      placements.forEach(function (p) { p.x -= lowX; p.y -= lowY; });
+    }
   }
 
   /* ------------------------------------------------------------------ */
@@ -652,7 +739,7 @@
             z: 0, l: windTpl[wi][2], w: windTpl[wi][3], h: wt.h, baseH: wt.baseH,
             weight: wt.weight, rotated: windTpl[wi][2] === wt.w,
             count: wc, stackHeight: wc * wt.h, strip: 'W', order: wi,
-            baseL: windTpl[wi][2], baseW: windTpl[wi][3], noAlign: true
+            baseL: windTpl[wi][2], baseW: windTpl[wi][3]
           });
           remainW -= wc;
         }
@@ -782,43 +869,16 @@
       }
     }
 
-    // 没有叠放的矮垛 / 单层优先靠柜门；比较原方向和镜像方向，取更靠近柜门的一种。
-    var maxX = 0;
-    best.placements.forEach(function (p) { maxX = Math.max(maxX, p.x + p.l); });
-    var scoreOrig = 0, scoreMirror = 0;
+    // 二次紧凑化：X 向柜底、Y 向左侧内壁，真实矩形碰撞检测。
+    compactPlacements(best.placements, L, W);
+    var maxX = 0, minX = Infinity;
     best.placements.forEach(function (p) {
-      var center = p.x + p.l / 2;
-      var h = p.stackHeight || p.h;
-      scoreOrig += h * center;
-      scoreMirror += h * (maxX - center);
+      maxX = Math.max(maxX, p.x + p.l);
+      minX = Math.min(minX, p.x);
     });
-    if (scoreMirror < scoreOrig) {
-      best.placements.forEach(function (p) { p.x = maxX - (p.x + p.l); });
-    }
-
-    // 从里到外装载：每个纵向通道都尽量向柜底（x 最大端）靠，
-    // 不能只平移整票货——否则短通道会在柜底留下一个局部大空位。
-    var alignList = best.placements.slice().sort(function (a, b) {
-      return (b.x + b.l) - (a.x + a.l);
-    });
-    function yOverlap(a, b) {
-      return a.y < b.y + b.w - EPS && b.y < a.y + a.w - EPS;
-    }
-    alignList.forEach(function (p) {
-      if (p.noAlign) return;
-      var limit = L - p.l;
-      best.placements.forEach(function (q) {
-        if (q === p) return;
-        if (q.x + EPS < p.x) return;
-        if (!yOverlap(p, q)) return;
-        limit = Math.min(limit, q.x - p.l);
-      });
-      if (limit > p.x) p.x = limit;
-    });
-
-    var doorClearance = Infinity;
-    best.placements.forEach(function (p) { doorClearance = Math.min(doorClearance, p.x); });
-    if (!isFinite(doorClearance)) doorClearance = 0;
+    if (!isFinite(minX)) minX = 0;
+    var doorClearance = Math.max(0, L - maxX);
+    var bottomGap = Math.max(0, minX);
     best.placements.forEach(function (p) {
       var ids = Object.create(null);
       p.layers.forEach(function (l) { ids[l.typeId] = true; });
@@ -962,6 +1022,7 @@
       doorGap: P.doorGap,
       packingLength: packingL,
       doorClearance: doorClearance,
+      bottomGap: bottomGap,
       allowRotate: P.allowRotate,
       allowStack: P.allowStack,
       cutsTried: cuts.length + 1,
@@ -1039,6 +1100,7 @@
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   root.CL_SOLVER = API;
 })(typeof window !== 'undefined' ? window : globalThis);
+
 
 
 

@@ -398,9 +398,9 @@
     }
     ctx.restore();
 
-    // 柜门地标
-    var d0 = this._project(vec(0, 0, 3), cam);
-    var d1 = this._project(vec(0, W, 3), cam);
+    // 柜门地标（X=L；X=0 是柜底装载起点）
+    var d0 = this._project(vec(L, 0, 3), cam);
+    var d1 = this._project(vec(L, W, 3), cam);
     this._line(d0, d1, 'rgba(230, 170, 110, .74)', 2, [7, 5]);
   };
 
@@ -408,20 +408,20 @@
     var m = this.model;
     if (!m) return;
     var W = m.W, H = m.H;
-    var a = this._project(vec(0, -90, 0), cam);
-    var b = this._project(vec(0, 0, 0), cam);
+    var a = this._project(vec(m.L, -90, 0), cam);
+    var b = this._project(vec(m.L, 0, 0), cam);
     this._line(a, b, 'rgba(230, 170, 110, .82)', 1.8);
-    var arrow = this._project(vec(0, -150, H * 0.16), cam);
+    var arrow = this._project(vec(m.L, -150, H * 0.16), cam);
     if (arrow) this._pill('柜门 →', arrow.x, arrow.y, 'center', 'rgba(120, 71, 36, .88)');
   };
 
   Scene.prototype._drawBottomLabel = function (cam) {
     var m = this.model;
     if (!m) return;
-    var base = this._project(vec(m.L, m.W / 2, 0), cam);
-    var top = this._project(vec(m.L, m.W / 2, m.H + 80), cam);
+    var base = this._project(vec(0, m.W / 2, 0), cam);
+    var top = this._project(vec(0, m.W / 2, m.H + 80), cam);
     if (base && top) this._line(base, top, 'rgba(146, 178, 184, .30)', 1, [4, 4]);
-    var p = this._project(vec(m.L, m.W / 2, m.H + 130), cam);
+    var p = this._project(vec(0, m.W / 2, m.H + 130), cam);
     if (p) this._pill('柜底 · 装载起点', p.x, p.y, 'center', 'rgba(44, 70, 80, .92)');
   };
 

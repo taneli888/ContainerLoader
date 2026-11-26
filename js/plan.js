@@ -71,11 +71,11 @@
       }
     });
 
-    // 柜门线
-    out.push('<path d="M' + X(0) + ' ' + Y(0) + 'v' + (W * scale) + '" stroke="#c2733c" stroke-width="3"/>');
-    out.push('<path d="M' + (X(0) - 26) + ' ' + (Y(W / 2)) + 'h20" stroke="#c2733c" stroke-width="1.4"/>');
-    out.push('<path d="M' + (X(0) - 12) + ' ' + (Y(W / 2) - 4) + 'l-6 4 6 4" fill="none" stroke="#c2733c" stroke-width="1.4"/>');
-    out.push('<text x="' + X(0) + '" y="' + (Y(W) + 24) + '" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="10" font-weight="700" fill="#9e5527">柜门</text>');
+    // 柜门线（X=L；X=0 是柜底装载起点）
+    out.push('<path d="M' + X(L) + ' ' + Y(0) + 'v' + (W * scale) + '" stroke="#c2733c" stroke-width="3"/>');
+    out.push('<path d="M' + (X(L) + 6) + ' ' + (Y(W / 2)) + 'h20" stroke="#c2733c" stroke-width="1.4"/>');
+    out.push('<path d="M' + (X(L) + 12) + ' ' + (Y(W / 2) - 4) + 'l6 4-6 4" fill="none" stroke="#c2733c" stroke-width="1.4"/>');
+    out.push('<text x="' + X(L) + '" y="' + (Y(W) + 24) + '" text-anchor="end" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="10" font-weight="700" fill="#9e5527">柜门</text>');
 
     // 实际装载包络尺寸：长箭头 + 两侧不一致时分开标
     var ps = result.placements || [];
@@ -137,8 +137,8 @@
     }
 
     // 方向提示
-    out.push('<text x="' + X(L) + '" y="' + (Y(W) + 24) + '" text-anchor="end" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="10.5" font-weight="700" fill="#2c4650">柜底 · 装载起点</text>');
-    out.push('<text x="' + (X(0) + 52) + '" y="' + (Y(W) + 24) + '" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="9.5" fill="#9aa3a6">' + (result.stackingUsed ? '叠放' : '单层') + ' · 编号为垛位</text>');
+    out.push('<text x="' + X(0) + '" y="' + (Y(W) + 24) + '" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="10.5" font-weight="700" fill="#2c4650">柜底 · 装载起点</text>');
+    out.push('<text x="' + (X(0) + 92) + '" y="' + (Y(W) + 24) + '" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="9.5" fill="#9aa3a6">' + (result.stackingUsed ? '叠放' : '单层') + ' · 编号为垛位</text>');
 
     out.push('</svg>');
     return out.join('');
@@ -184,10 +184,10 @@
       });
     });
 
-    // 门
-    out.push('<path d="M' + X(0) + ' ' + Y(H) + 'v' + (H * scale) + '" stroke="#c2733c" stroke-width="2.4"/>');
-    out.push('<text x="' + (X(0) - 12) + '" y="' + (Y(H) - 10) + '" text-anchor="end" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="9.5" font-weight="700" fill="#9e5527">柜门</text>');
-    out.push('<text x="' + (X(L) + 8) + '" y="' + (Y(H) - 10) + '" text-anchor="start" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="9.5" font-weight="700" fill="#2c4650">柜底</text>');
+    // 门（X=L）
+    out.push('<path d="M' + X(L) + ' ' + Y(H) + 'v' + (H * scale) + '" stroke="#c2733c" stroke-width="2.4"/>');
+    out.push('<text x="' + (X(L) + 8) + '" y="' + (Y(H) - 10) + '" text-anchor="start" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="9.5" font-weight="700" fill="#9e5527">柜门</text>');
+    out.push('<text x="' + (X(0) - 8) + '" y="' + (Y(H) - 10) + '" text-anchor="end" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="9.5" font-weight="700" fill="#2c4650">柜底</text>');
 
     // 高度尺寸
     var dimX = X(L) + 24;
