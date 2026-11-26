@@ -162,5 +162,13 @@ const smMinX = multiDoor.ok ? Math.min(...multiDoor.placements.filter((p) => p.t
 check('多规格后装规格在柜门侧', multiDoor.ok && smMinX >= eurMaxX - 1, multiDoor.ok ? ('SM ' + smMinX + ' / EUR end ' + eurMaxX) : '');
 check('多规格总托数 10', multiDoor.ok && multiDoor.totalCount === 10, multiDoor.ok ? String(multiDoor.totalCount) : '');
 
+const woda = { id: 'woda', name: 'WODA', code: 'WODA', l: 1130, w: 1130, h: 1100, baseH: 144, qty: 7, weight: 0, fill: false, color: 0 };
+const eur2 = { id: 'eur2', name: 'EUR', code: 'EUR', l: 1200, w: 800, h: 1100, baseH: 144, qty: 2, weight: 0, fill: false, color: 1 };
+const zoned = scenario('WODA + EUR 叠放优先：单层不夹在叠放中间', c20, [woda, eur2], { allowRotate: true, gap: 0, allowStack: true, preferSingle: false, doorGap: 0 });
+validatePlan('ZONED', zoned, c20);
+const highEnd = zoned.ok ? Math.max(...zoned.placements.filter((p) => p.count > 1).map((p) => p.x + p.baseL)) : 0;
+const lowMin = zoned.ok ? Math.min(...zoned.placements.filter((p) => p.count === 1).map((p) => p.x)) : 0;
+check('单层托盘不夹在叠放托盘中间', zoned.ok && lowMin >= highEnd - 1, zoned.ok ? ('低层起点 ' + lowMin + ' / 高层终点 ' + highEnd) : '');
+
 console.log('\n结果：' + passed + ' 通过，' + failed + ' 失败');
 process.exit(failed ? 1 : 0);

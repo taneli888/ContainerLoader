@@ -540,18 +540,32 @@
     if (!requiredTypes.length) return null;
     var placements = [];
     var bandX = 0;
-    var typeOrder = 0;
 
+    // 安全约束：先放所有双层/多层垛，再放单层垛；单层不会夹在叠放垛中间。
+    var highGroups = [];
+    var lowGroups = [];
     for (var ti = 0; ti < requiredTypes.length; ti++) {
       var t = requiredTypes[ti];
       var units = t.stackQty;
       var counts = distributeCounts(t.qty, units, t.layers);
       if (!counts) return null;
+      var hi = [], lo = [];
+      counts.forEach(function (c) { (c > 1 ? hi : lo).push(c); });
+      if (hi.length) highGroups.push({ t: t, counts: hi, typeOrder: ti });
+      if (lo.length) lowGroups.push({ t: t, counts: lo, typeOrder: ti });
+    }
+
+    var groups = highGroups.concat(lowGroups);
+    for (var gi = 0; gi < groups.length; gi++) {
+      var g = groups[gi];
+      var gt = g.t;
+      var gc = g.counts;
+      var gu = gc.length;
       var bestO = null;
-      typeOrientations(t, P.allowRotate).forEach(function (o) {
+      typeOrientations(gt, P.allowRotate).forEach(function (o) {
         var cols = Math.floor(W / o.w);
         if (cols < 1) return;
-        var rows = Math.ceil(units / cols);
+        var rows = Math.ceil(gu / cols);
         var depth = rows * o.l;
         if (bandX + depth > L + EPS) return;
         if (!bestO || depth < bestO.depth || (depth === bestO.depth && cols > bestO.cols)) {
@@ -559,20 +573,19 @@
         }
       });
       if (!bestO) return null;
-      for (var ui = 0; ui < units; ui++) {
+      for (var ui = 0; ui < gu; ui++) {
         var row = Math.floor(ui / bestO.cols);
         var col = ui % bestO.cols;
         placements.push({
-          typeId: t.id, name: t.name, code: t.code, color: t.color, fill: false,
+          typeId: gt.id, name: gt.name, code: gt.code, color: gt.color, fill: false,
           x: bandX + row * bestO.l, y: col * bestO.w, z: 0,
-          l: bestO.l, w: bestO.w, h: t.h, baseH: t.baseH, weight: t.weight,
-          rotated: bestO.rotated, count: counts[ui], stackHeight: counts[ui] * t.h,
+          l: bestO.l, w: bestO.w, h: gt.h, baseH: gt.baseH, weight: gt.weight,
+          rotated: bestO.rotated, count: gc[ui], stackHeight: gc[ui] * gt.h,
           strip: 'B', order: placements.length, baseL: bestO.l, baseW: bestO.w,
-          typeOrder: typeOrder
+          typeOrder: g.typeOrder
         });
       }
       bandX += bestO.depth;
-      typeOrder++;
     }
 
     var fillCount = 0;
@@ -598,7 +611,7 @@
             x: bandX + frow * bestF.l, y: fcol * bestF.w, z: 0,
             l: bestF.l, w: bestF.w, h: fillType.h, baseH: fillType.baseH, weight: fillType.weight,
             rotated: bestF.rotated, count: fillType.layers, stackHeight: fillType.layers * fillType.h,
-            strip: 'B', order: placements.length, baseL: bestF.l, baseW: bestF.w, typeOrder: typeOrder
+            strip: 'B', order: placements.length, baseL: bestF.l, baseW: bestF.w, typeOrder: requiredTypes.length
           });
         }
         fillCount = bestF.total;
