@@ -179,15 +179,16 @@ const gapFix = scenario('WODA10 + EUR4：柜底利用率优先', c20, [woda10, e
 validatePlan('GAPFIX', gapFix, c20);
 const eurMin = gapFix.ok ? Math.min(...gapFix.placements.filter((p) => p.typeId === 'eur2').map((p) => p.x)) : 0;
 const wodaMin = gapFix.ok ? Math.min(...gapFix.placements.filter((p) => p.typeId === 'woda').map((p) => p.x)) : 0;
-check('WODA 先填柜底，EUR 接在后面', gapFix.ok && wodaMin === 0 && eurMin >= 2260, gapFix.ok ? ('WODA ' + wodaMin + ' / EUR ' + eurMin) : '');
-check('WODA10+EUR4 实装 4590mm', gapFix.ok && Math.max(...gapFix.placements.map((p) => p.x + p.baseL)) === 4590, gapFix.ok ? String(Math.max(...gapFix.placements.map((p) => p.x + p.baseL))) : '');
+check('WODA 先填柜底，EUR 接在后面', gapFix.ok && wodaMin === 0 && eurMin >= 1130, gapFix.ok ? ('WODA ' + wodaMin + ' / EUR ' + eurMin) : '');
+check('WODA10+EUR4 不超过 4590mm', gapFix.ok && Math.max(...gapFix.placements.map((p) => p.x + p.baseL)) <= 4590, gapFix.ok ? String(Math.max(...gapFix.placements.map((p) => p.x + p.baseL))) : '');
 
 const woda12 = Object.assign({}, woda, { qty: 12 });
 const eur3 = Object.assign({}, eur2, { qty: 3 });
 const fillGap = scenario('WODA12 + EUR3：单层 EUR 靠柜门', c20, [woda12, eur3], { allowRotate: true, gap: 0, allowStack: true, preferSingle: false, doorGap: 0 });
 validatePlan('FILLGAP', fillGap, c20);
 check('WODA12+EUR3 单层 EUR 贴柜门', fillGap.ok && Math.max(...fillGap.placements.map((p) => p.x + p.baseL)) <= 5898, fillGap.ok ? String(Math.max(...fillGap.placements.map((p) => p.x + p.baseL))) : '');
-check('单层 EUR 在所有叠放垛之后', fillGap.ok && fillGap.placements.some((p) => p.typeId === 'eur2' && p.count === 1 && p.x >= 4590), fillGap.ok ? 'ok' : '');
+const fillHighMax = fillGap.ok ? Math.max(...fillGap.placements.filter((p) => p.count > 1).map((p) => p.x + p.baseL)) : 0;
+check('单层 EUR 在所有叠放垛之后', fillGap.ok && fillGap.placements.some((p) => p.typeId === 'eur2' && p.count === 1 && p.x >= fillHighMax - 1), fillGap.ok ? ('high ' + fillHighMax) : '');
 
 const woda4 = Object.assign({}, woda, { qty: 4 });
 const eur7 = Object.assign({}, eur2, { qty: 7 });

@@ -714,7 +714,7 @@
     orders.push(highUnits.slice().sort(function (a, b) { return b.t.l * b.t.w - a.t.l * a.t.w; }));
     orders.push(highUnits.slice().sort(function (a, b) { return a.t.l * a.t.w - b.t.l * b.t.w; }));
     // 单元级顺序对 Bottom-Left 很敏感：加一批确定性打乱顺序，帮助在柜门预留单层位。
-    if (lowUnits.length === 1) {
+    if (lowUnits.length <= 2) {
       for (var seed = 1; seed <= 40; seed++) {
         var arr = highUnits.slice();
         var s = seed * 9301 + 49297;
@@ -763,6 +763,35 @@
       }
     }
 
+    // 预留柜门条带：把单层托盘放进条带，高层垛在剩余长度内重新全局排。
+    if (lowUnits.length >= 1 && lowUnits.length <= 2) {
+      var doorDepth = 0;
+      lowUnits.forEach(function (u) {
+        typeOrientations(u.t, P.allowRotate).forEach(function (o) { doorDepth = Math.max(doorDepth, o.l); });
+      });
+      if (doorDepth > 0 && L - doorDepth > 1000) {
+        var highPallets = requiredTypes.map(function (t) {
+          var n = unitsForType(t, true).length;
+          return {
+            id: t.id, name: t.name, code: t.code, l: t.l, w: t.w, h: t.h,
+            baseH: t.baseH, qty: n * 2, weight: t.weight, fill: false, color: t.color
+          };
+        }).filter(function (t) { return t.qty > 0; });
+        if (highPallets.length) {
+          var highRes = solveCore(
+            { l: L - doorDepth, w: W, h: P.H, payload: P.payload },
+            highPallets,
+            { allowRotate: P.allowRotate, gap: 0, allowStack: true, preferSingle: false, doorGap: 0, noMixed: true, noMerge: true }
+          );
+          if (highRes && highRes.ok) {
+            var highs2 = highRes.placements;
+            var lows2 = packUnitsBottomLeft(lowUnits, L - doorDepth, L, W, P.allowRotate);
+            if (lows2) consider(highs2, lows2);
+          }
+        }
+      }
+    }
+
     orders.forEach(function (order) {
       var highs = packUnitsBottomLeft(order, 0, L, W, P.allowRotate);
       if (!highs) return;
@@ -771,6 +800,41 @@
       consider(highs, lows);
 
       // 单层只有 1 托时，优先把它固定在柜门边，再把高层垛绕开它排。
+      if (lowUnits.length === 2) {
+        var pairs = [[lowUnits[0], lowUnits[1]], [lowUnits[1], lowUnits[0]]];
+        var offs2 = [0, 100, 200, 300, 400, 600];
+        pairs.forEach(function (pair) {
+          typeOrientations(pair[0].t, P.allowRotate).forEach(function (o1) {
+            typeOrientations(pair[1].t, P.allowRotate).forEach(function (o2) {
+              offs2.forEach(function (of1) {
+                offs2.forEach(function (of2) {
+                  [[0, o1.w], [o2.w, 0], [0, W - o2.w], [W - o1.w, 0]].forEach(function (ys3) {
+                    var p1 = {
+                      typeId: pair[0].t.id, name: pair[0].t.name, code: pair[0].t.code, color: pair[0].t.color, fill: false,
+                      x: L - o1.l - of1, y: ys3[0], z: 0, l: o1.l, w: o1.w, h: pair[0].t.h, baseH: pair[0].t.baseH,
+                      weight: pair[0].t.weight, rotated: o1.rotated, count: 1, stackHeight: pair[0].t.h,
+                      strip: 'M', order: 0, baseL: o1.l, baseW: o1.w
+                    };
+                    var p2 = {
+                      typeId: pair[1].t.id, name: pair[1].t.name, code: pair[1].t.code, color: pair[1].t.color, fill: false,
+                      x: L - o2.l - of2, y: ys3[1], z: 0, l: o2.l, w: o2.w, h: pair[1].t.h, baseH: pair[1].t.baseH,
+                      weight: pair[1].t.weight, rotated: o2.rotated, count: 1, stackHeight: pair[1].t.h,
+                      strip: 'M', order: 1, baseL: o2.l, baseW: o2.w
+                    };
+                    if (p1.x < 0 || p2.x < 0) return;
+                    if (p1.y + p1.w > W + EPS || p2.y + p2.w > W + EPS) return;
+                    if (p1.x < p2.x + p2.l - EPS && p2.x < p1.x + p1.l - EPS &&
+                        p1.y < p2.y + p2.w - EPS && p2.y < p1.y + p1.w - EPS) return;
+                    var h2 = packUnitsBottomLeft(order, 0, L, W, P.allowRotate, [p1, p2]);
+                    if (h2) consider(h2, [p1, p2]);
+                  });
+                });
+              });
+            });
+          });
+        });
+      }
+
       if (lowUnits.length === 1) {
         var lu = lowUnits[0];
         var offsets = [0, 100, 200, 300, 400, 500, 600, 800, 1000, 1200];
@@ -1146,7 +1210,7 @@
     }
 
     // 4) 多规格：尝试不同的规格先后顺序，选择“柜底侧空缝最小”的方案。
-    if (requiredTypes.length >= 2) {
+    if (requiredTypes.length >= 2 && !(options && options.noMixed)) {
       var orders = permutations(requiredTypes, 24);
       var bestBand = null;
       orders.forEach(function (order) {
