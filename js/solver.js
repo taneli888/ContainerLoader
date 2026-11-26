@@ -1284,7 +1284,11 @@
     // 有叠放垛时，单层垛不再被拉回柜底——单层要留在柜门侧。
     var hasHighStack = best.placements.some(function (p) { return p.count > 1; });
     compactPlacements(best.placements, L, W, hasHighStack);
-    if (hasHighStack) promoteSinglesToDoor(best.placements, L, W);
+    if (hasHighStack) {
+      promoteSinglesToDoor(best.placements, L, W);
+      // 换位后再次全量紧凑化：把换位产生的中间缝隙压掉，单层仍保持在高层之后。
+      compactPlacements(best.placements, L, W, false);
+    }
     var maxX = 0, minX = Infinity;
     best.placements.forEach(function (p) {
       maxX = Math.max(maxX, p.x + p.l);
