@@ -184,10 +184,21 @@ check('WODA10+EUR4 实装 4590mm', gapFix.ok && Math.max(...gapFix.placements.ma
 
 const woda12 = Object.assign({}, woda, { qty: 12 });
 const eur3 = Object.assign({}, eur2, { qty: 3 });
-const fillGap = scenario('WODA12 + EUR3：单层 EUR 补侧缝', c20, [woda12, eur3], { allowRotate: true, gap: 0, allowStack: true, preferSingle: false, doorGap: 0 });
+const fillGap = scenario('WODA12 + EUR3：单层 EUR 靠柜门', c20, [woda12, eur3], { allowRotate: true, gap: 0, allowStack: true, preferSingle: false, doorGap: 0 });
 validatePlan('FILLGAP', fillGap, c20);
-check('WODA12+EUR3 实装 4590mm', fillGap.ok && Math.max(...fillGap.placements.map((p) => p.x + p.baseL)) === 4590, fillGap.ok ? String(Math.max(...fillGap.placements.map((p) => p.x + p.baseL))) : '');
-check('单层 EUR 填在侧缝、不增加长度', fillGap.ok && fillGap.placements.some((p) => p.typeId === 'eur2' && p.count === 1 && p.x + p.baseL <= 4590), fillGap.ok ? 'ok' : '');
+check('WODA12+EUR3 单层 EUR 贴柜门', fillGap.ok && Math.max(...fillGap.placements.map((p) => p.x + p.baseL)) <= 5898, fillGap.ok ? String(Math.max(...fillGap.placements.map((p) => p.x + p.baseL))) : '');
+check('单层 EUR 在所有叠放垛之后', fillGap.ok && fillGap.placements.some((p) => p.typeId === 'eur2' && p.count === 1 && p.x >= 4590), fillGap.ok ? 'ok' : '');
+
+const woda4 = Object.assign({}, woda, { qty: 4 });
+const eur7 = Object.assign({}, eur2, { qty: 7 });
+const twoPlusThree = scenario('WODA4 + EUR7：2组WODA紧贴3组EUR，单托EUR靠柜门', c20, [woda4, eur7], { allowRotate: true, gap: 0, allowStack: true, preferSingle: false, doorGap: 0 });
+validatePlan('2+3', twoPlusThree, c20);
+const wodaMax = twoPlusThree.ok ? Math.max(...twoPlusThree.placements.filter((p) => p.typeId === 'woda').map((p) => p.x + p.baseL)) : 0;
+const eurMin2 = twoPlusThree.ok ? Math.min(...twoPlusThree.placements.filter((p) => p.typeId === 'eur2').map((p) => p.x)) : 0;
+const singleEur = twoPlusThree.ok ? twoPlusThree.placements.filter((p) => p.typeId === 'eur2' && p.count === 1) : [];
+check('WODA 高层紧贴 EUR 高层', twoPlusThree.ok && eurMin2 <= wodaMax + 1, twoPlusThree.ok ? ('WODA end ' + wodaMax + ' / EUR ' + eurMin2) : '');
+check('单层 EUR 在柜门侧', twoPlusThree.ok && singleEur.length === 1 && singleEur[0].x >= wodaMax - 1, twoPlusThree.ok ? JSON.stringify(singleEur.map((p) => [p.x, p.y])) : '');
+check('2组WODA + 3组EUR + 单托EUR = 6垛11托', twoPlusThree.ok && twoPlusThree.stackCount === 6 && twoPlusThree.totalCount === 11, twoPlusThree.ok ? (twoPlusThree.stackCount + '垛/' + twoPlusThree.totalCount + '托') : '');
 
 console.log('\n结果：' + passed + ' 通过，' + failed + ' 失败');
 process.exit(failed ? 1 : 0);

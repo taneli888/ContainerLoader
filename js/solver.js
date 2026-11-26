@@ -89,7 +89,7 @@
 
   // 每个托盘都尝试向 X=0（柜底）和 Y=0 顶到不能顶为止。
   // 这是几何紧凑化，不改变层数/数量，也不做任何居中或均分。
-  function compactPlacements(placements, L, W) {
+  function compactPlacements(placements, L, W, preserveSingles) {
     if (!placements.length) return;
     var minX = Infinity, minY = Infinity;
     placements.forEach(function (p) {
@@ -109,6 +109,7 @@
       });
       byX.forEach(function (p) {
         if (p.noAlign) return;
+        if (preserveSingles && p.count === 1) return;
         var target = 0;
         placements.forEach(function (q) {
           if (q === p || !overlapsY(p, q)) return;
@@ -126,6 +127,7 @@
       });
       byY.forEach(function (p) {
         if (p.noAlign) return;
+        if (preserveSingles && p.count === 1) return;
         var target = 0;
         placements.forEach(function (q) {
           if (q === p || !overlapsX(p, q)) return;
@@ -685,7 +687,8 @@
     orders.forEach(function (order) {
       var highs = packUnitsBottomLeft(order, 0, L, W, P.allowRotate);
       if (!highs) return;
-      var lows = packUnitsBottomLeft(lowUnits, 0, L, W, P.allowRotate, highs);
+      var highEnd = Math.max.apply(null, highs.map(function (p) { return p.x + p.l; }));
+      var lows = packUnitsBottomLeft(lowUnits, highEnd, L, W, P.allowRotate, highs);
       if (!lows) return;
       var placements = highs.concat(lows);
       var gap = bottomGapMetric(placements, L, W);
@@ -1186,7 +1189,9 @@
     }
 
     // 二次紧凑化：X 向柜底、Y 向左侧内壁，真实矩形碰撞检测。
-    compactPlacements(best.placements, L, W);
+    // 有叠放垛时，单层垛不再被拉回柜底——单层要留在柜门侧。
+    var hasHighStack = best.placements.some(function (p) { return p.count > 1; });
+    compactPlacements(best.placements, L, W, hasHighStack);
     var maxX = 0, minX = Infinity;
     best.placements.forEach(function (p) {
       maxX = Math.max(maxX, p.x + p.l);
