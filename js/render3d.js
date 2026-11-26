@@ -195,21 +195,41 @@
     return { x: cam.eye.x + dir.x * t, y: cam.eye.y + dir.y * t };
   };
 
+  Scene.prototype._findRotationSpot = function (p, nl, nw) {
+    var m = this.model;
+    if (!m) return null;
+    var ocx = p.x + p.l / 2, ocy = p.y + p.w / 2;
+    var xs = [p.x, ocx - nl / 2, 0, m.L - nl];
+    var ys = [p.y, ocy - nw / 2, 0, m.W - nw];
+    (m.placements || []).forEach(function (q) {
+      if (q === p) return;
+      xs.push(q.x, q.x + q.l, q.x - nl, q.x + q.l - nl);
+      ys.push(q.y, q.y + q.w, q.y - nw, q.y + q.w - nw);
+    });
+    var best = null;
+    xs.forEach(function (x) {
+      if (x < -1e-6 || x + nl > m.L + 1e-6) return;
+      ys.forEach(function (y) {
+        if (y < -1e-6 || y + nw > m.W + 1e-6) return;
+        if (!this._canPlace(p, x, y, nl, nw)) return;
+        var score = Math.pow(x + nl / 2 - ocx, 2) + Math.pow(y + nw / 2 - ocy, 2);
+        if (!best || score < best.score - 1e-6 ||
+            (Math.abs(score - best.score) < 1e-6 && (x < best.x - 1e-6 || (Math.abs(x - best.x) < 1e-6 && y < best.y - 1e-6)))) {
+          best = { x: x, y: y, score: score };
+        }
+      }, this);
+    }, this);
+    return best;
+  };
+
   Scene.prototype.rotateSelected = function () {
     var p = this._findPlacement(this.selectedSeq);
     if (!p) return false;
     var nl = p.w, nw = p.l;
-    var cx = p.x + p.l / 2, cy = p.y + p.w / 2;
-    var nx = Math.round(cx - nl / 2), ny = Math.round(cy - nw / 2);
-    var oldL = p.l, oldW = p.w;
+    var spot = this._findRotationSpot(p, nl, nw);
+    if (!spot) return false;
+    p.x = Math.round(spot.x); p.y = Math.round(spot.y);
     p.l = nl; p.w = nw;
-    var sp = this._snapPosition(p, nx, ny);
-    nx = sp.x; ny = sp.y;
-    if (!this._canPlace(p, nx, ny, nl, nw)) {
-      p.l = oldL; p.w = oldW;
-      return false;
-    }
-    p.x = nx; p.y = ny;
     p.baseL = nl; p.baseW = nw;
     p.rotated = !p.rotated;
     if (p.layers && p.layers.length) {

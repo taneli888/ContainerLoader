@@ -280,6 +280,24 @@ async function shot(cdp, name) {
     })()`);
     await evaluate(cdp, `document.querySelector('#btnManual').click()`);
 
+    // 有空间时旋转后自动找位置
+    await evaluate(cdp, `(() => {
+      __CL_DEBUG.state.pallets = [
+        { id:'e2x3', name:'EUR2 1200×1000', code:'EUR2', l:1200, w:1000, h:1100, baseH:144, qty:3, weight:0, fill:false, color:0 }
+      ];
+      __CL_DEBUG.calculate(false);
+      document.querySelector('#btnManual').click();
+      __CL_DEBUG.scene.setSelected(__CL_DEBUG.state.layout.placements[0].seq);
+    })()`);
+    const rotateFree = await evaluate(cdp, `(() => {
+      const p = __CL_DEBUG.state.layout.placements[0];
+      const before = { x:p.x, y:p.y, l:p.l, w:p.w };
+      const ok = __CL_DEBUG.scene.rotateSelected();
+      return { ok, before, after: { x:p.x, y:p.y, l:p.l, w:p.w } };
+    })()`);
+    await evaluate(cdp, `document.querySelector('#btnManual').click(); document.querySelector('#btnExample').click()`);
+    await sleep(700);
+
     // 混合叠放：1160×1150 底 + 1120×1120 上
     await evaluate(cdp, `(() => {
       __CL_DEBUG.state.pallets = [
@@ -420,6 +438,7 @@ async function shot(cdp, name) {
     console.log('FILL_TOGGLE', JSON.stringify({ off: fillOff, on: fillOn }, null, 2));
     console.log('PRIORITY', JSON.stringify({ stack: priorityStack, single: prioritySingle }, null, 2));
     console.log('MANUAL', JSON.stringify(manual, null, 2));
+    console.log('ROTATE_FREE', JSON.stringify(rotateFree, null, 2));
     console.log('MIXED', JSON.stringify(mixedResult, null, 2));
     console.log('WINDMILL', JSON.stringify(windmill, null, 2));
     console.log('LEAST11', JSON.stringify(least11, null, 2));

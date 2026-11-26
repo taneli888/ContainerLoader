@@ -734,9 +734,9 @@
     if (!state.manualMode || !scene) { toast('先开启“手动”，再选中一个托盘'); return; }
     if (!state.selectedSeq) { toast('先在 3D 里选中一个托盘'); return; }
     if (scene.rotateSelected()) {
-      toast('已旋转 90°');
+      toast('已旋转 90°，并放到最近的可用位置');
     } else {
-      toast('这个位置放不下旋转后的托盘，已保持原方向');
+      toast('旋转后没有可用位置，已保持原方向');
     }
   }
 
