@@ -293,7 +293,11 @@ async function shot(cdp, name) {
       const p = __CL_DEBUG.state.layout.placements[0];
       const before = { x:p.x, y:p.y, l:p.l, w:p.w };
       const ok = __CL_DEBUG.scene.rotateSelected();
-      return { ok, before, after: { x:p.x, y:p.y, l:p.l, w:p.w } };
+      const edgeFront = __CL_DEBUG.scene.moveSelectedToEdge('front');
+      const afterFront = { x:p.x, y:p.y };
+      const edgeLeft = __CL_DEBUG.scene.moveSelectedToEdge('left');
+      const afterLeft = { x:p.x, y:p.y };
+      return { ok, before, after: { x:p.x, y:p.y, l:p.l, w:p.w }, edgeFront, afterFront, edgeLeft, afterLeft };
     })()`);
     await evaluate(cdp, `document.querySelector('#btnManual').click(); document.querySelector('#btnExample').click()`);
     await sleep(700);

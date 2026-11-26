@@ -671,6 +671,13 @@
     var rot = $('#btnRotatePallet');
     if (rot) rot.hidden = true;
     state.selectedSeq = null;
+    updateEdgePad();
+  }
+
+  function updateEdgePad() {
+    var pad = $('#edgePad');
+    if (!pad) return;
+    pad.hidden = !(state.manualMode && state.selectedSeq && state.layout && state.layout.ok);
   }
 
   function showSelection(seq) {
@@ -688,6 +695,7 @@
     $('#stageSelection').hidden = false;
     var rot = $('#btnRotatePallet');
     if (rot) rot.hidden = !(state.manualMode && seq);
+    updateEdgePad();
   }
 
   function setManualMode(on, silent) {
@@ -702,8 +710,9 @@
     if (rot) rot.hidden = !(state.manualMode && state.selectedSeq);
     var hint = $('.stage-hint');
     if (hint) hint.textContent = state.manualMode
-      ? '拖托盘移动（靠近内壁/托盘边缘自动吸附；碰撞/越界会挡住）· 空白处旋转视角 · R 旋转 90°'
+      ? '拖托盘移动（自动吸附；碰撞/越界会挡住）· 空白处旋转视角 · ↑/←/→ 贴边 · R 旋转 90°'
       : '左键旋转 · 右键/Shift 平移 · 滚轮缩放 · 双击复位';
+    updateEdgePad();
     if (!silent) toast(state.manualMode ? '手动调整已开启：拖动托盘到空位' : '已退出手动调整');
   }
 
@@ -1200,6 +1209,13 @@
     $('#selectionClose').addEventListener('click', hideSelection);
     $('#btnManual').addEventListener('click', function () { setManualMode(!state.manualMode); });
     $('#btnRotatePallet').addEventListener('click', rotateManualPallet);
+    $$('#edgePad button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        if (!state.manualMode || !state.selectedSeq || !scene) { toast('先开启手动并选中一个托盘'); return; }
+        var ok = scene.moveSelectedToEdge(btn.getAttribute('data-dir'));
+        if (!ok) toast('这个方向已经贴边或没有可用位置');
+      });
+    });
     $('#stageWrap').addEventListener('click', function (e) {
       if (e.target && e.target.id === 'scene') {
         // 点空白取消选择由 canvas 的 onSelect(null) 处理，这里不重复。
@@ -1217,6 +1233,13 @@
       if ((e.key === 'r' || e.key === 'R') && state.manualMode && tag !== 'input' && tag !== 'textarea' && tag !== 'select') {
         e.preventDefault();
         rotateManualPallet();
+      }
+      if (state.manualMode && state.selectedSeq && scene && tag !== 'input' && tag !== 'textarea' && tag !== 'select') {
+        var dir = e.key === 'ArrowUp' ? 'front' : e.key === 'ArrowLeft' ? 'left' : e.key === 'ArrowRight' ? 'right' : null;
+        if (dir) {
+          e.preventDefault();
+          if (!scene.moveSelectedToEdge(dir)) toast('这个方向已经贴边或没有可用位置');
+        }
       }
     });
   }

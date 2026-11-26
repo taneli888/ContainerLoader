@@ -222,6 +222,47 @@
     return best;
   };
 
+  Scene.prototype.moveSelectedToEdge = function (dir) {
+    var p = this._findPlacement(this.selectedSeq);
+    if (!p || !this.model) return false;
+    var m = this.model;
+    var nx = p.x, ny = p.y;
+    var yHit = function (q) {
+      return p.y < q.y + q.w - 1e-6 && q.y < p.y + p.w - 1e-6;
+    };
+    var xHit = function (q) {
+      return p.x < q.x + q.l - 1e-6 && q.x < p.x + p.l - 1e-6;
+    };
+    if (dir === 'front') {
+      nx = 0;
+      (m.placements || []).forEach(function (q) {
+        if (q === p || !yHit(q)) return;
+        if (q.x + q.l <= p.x + 1e-6) nx = Math.max(nx, q.x + q.l);
+      });
+    } else if (dir === 'left') {
+      ny = 0;
+      (m.placements || []).forEach(function (q) {
+        if (q === p || !xHit(q)) return;
+        if (q.y + q.w <= p.y + 1e-6) ny = Math.max(ny, q.y + q.w);
+      });
+    } else if (dir === 'right') {
+      ny = m.W - p.w;
+      (m.placements || []).forEach(function (q) {
+        if (q === p || !xHit(q)) return;
+        if (q.y >= p.y + p.w - 1e-6) ny = Math.min(ny, q.y - p.w);
+      });
+    } else {
+      return false;
+    }
+    nx = Math.round(nx); ny = Math.round(ny);
+    if (Math.abs(nx - p.x) < 1e-6 && Math.abs(ny - p.y) < 1e-6) return false;
+    if (!this._canPlace(p, nx, ny, p.l, p.w)) return false;
+    p.x = nx; p.y = ny;
+    if (this.onPlacementChange) this.onPlacementChange(p, true);
+    this.requestRender();
+    return true;
+  };
+
   Scene.prototype.rotateSelected = function () {
     var p = this._findPlacement(this.selectedSeq);
     if (!p) return false;

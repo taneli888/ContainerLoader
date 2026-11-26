@@ -13,7 +13,7 @@
   <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="css/style.css?v=20261126y">
+  <link rel="stylesheet" href="css/style.css?v=20261126aa">
 </head>
 <body data-mobile-tab="input">
 
@@ -223,6 +223,11 @@
         </button>
       </div>
       <div class="stage-dims" id="sceneDims"></div>
+      <div class="edge-pad" id="edgePad" hidden>
+        <button class="edge-btn edge-front" data-dir="front" type="button" title="向前贴到柜底或托盘边缘">↑<span>前</span></button>
+        <button class="edge-btn" data-dir="left" type="button" title="向左贴到内壁或托盘边缘">←<span>左</span></button>
+        <button class="edge-btn" data-dir="right" type="button" title="向右贴到内壁或托盘边缘">→<span>右</span></button>
+      </div>
       <div class="stage-empty" id="sceneEmpty">
         <div class="empty-icon">
           <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 20 32 8l24 12v24L32 56 8 44zM8 20l24 12 24-12M32 32v24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
@@ -378,13 +383,15 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="print-root" id="printRoot"></div>
 
-<script src="js/data.js?v=20261126y"></script>
-<script src="js/solver.js?v=20261126y"></script>
-<script src="js/render3d.js?v=20261126y"></script>
-<script src="js/plan.js?v=20261126y"></script>
-<script src="js/app.js?v=20261126y"></script>
+<script src="js/data.js?v=20261126aa"></script>
+<script src="js/solver.js?v=20261126aa"></script>
+<script src="js/render3d.js?v=20261126aa"></script>
+<script src="js/plan.js?v=20261126aa"></script>
+<script src="js/app.js?v=20261126aa"></script>
 </body>
 </html>
+
+
 
 
 

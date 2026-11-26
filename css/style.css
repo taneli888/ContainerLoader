@@ -738,6 +738,34 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .stage-tool:hover { background: rgba(120, 71, 36, .72); color: #f3cba4; }
 .stage-tool.active { background: #f2e5d2; color: #54351f; border-color: #f2e5d2; }
 .stage-tool[hidden] { display: none; }
+.edge-pad {
+  position: absolute;
+  left: 14px;
+  top: 112px;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 38px 38px;
+  gap: 5px;
+}
+.edge-pad[hidden] { display: none; }
+.edge-btn {
+  height: 38px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  border: 1px solid rgba(255, 248, 239, .24);
+  border-radius: 8px;
+  background: rgba(18, 32, 39, .82);
+  color: #ffe8ca;
+  font-size: 17px;
+  line-height: 1;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .18);
+}
+.edge-btn span { font-size: 9px; color: rgba(255, 236, 210, .72); margin-top: 2px; }
+.edge-btn:hover { background: rgba(120, 71, 36, .9); border-color: #e6b17c; }
+.edge-btn.edge-front { grid-column: 1 / span 2; justify-self: center; width: 46px; }
 .stage-reset {
   flex: 0 0 auto;
   width: 31px;
