@@ -182,5 +182,12 @@ const wodaMin = gapFix.ok ? Math.min(...gapFix.placements.filter((p) => p.typeId
 check('WODA 先填柜底，EUR 接在后面', gapFix.ok && wodaMin === 0 && eurMin >= 2260, gapFix.ok ? ('WODA ' + wodaMin + ' / EUR ' + eurMin) : '');
 check('WODA10+EUR4 实装 4590mm', gapFix.ok && Math.max(...gapFix.placements.map((p) => p.x + p.baseL)) === 4590, gapFix.ok ? String(Math.max(...gapFix.placements.map((p) => p.x + p.baseL))) : '');
 
+const woda12 = Object.assign({}, woda, { qty: 12 });
+const eur3 = Object.assign({}, eur2, { qty: 3 });
+const fillGap = scenario('WODA12 + EUR3：单层 EUR 补侧缝', c20, [woda12, eur3], { allowRotate: true, gap: 0, allowStack: true, preferSingle: false, doorGap: 0 });
+validatePlan('FILLGAP', fillGap, c20);
+check('WODA12+EUR3 实装 4590mm', fillGap.ok && Math.max(...fillGap.placements.map((p) => p.x + p.baseL)) === 4590, fillGap.ok ? String(Math.max(...fillGap.placements.map((p) => p.x + p.baseL))) : '');
+check('单层 EUR 填在侧缝、不增加长度', fillGap.ok && fillGap.placements.some((p) => p.typeId === 'eur2' && p.count === 1 && p.x + p.baseL <= 4590), fillGap.ok ? 'ok' : '');
+
 console.log('\n结果：' + passed + ' 通过，' + failed + ' 失败');
 process.exit(failed ? 1 : 0);

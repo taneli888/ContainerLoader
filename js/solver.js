@@ -589,8 +589,9 @@
     return gap;
   }
 
-  function packUnitsBottomLeft(units, startX, L, W, allowRotate) {
+  function packUnitsBottomLeft(units, startX, L, W, allowRotate, obstacles) {
     var placed = [];
+    var fixed = obstacles || [];
     for (var i = 0; i < units.length; i++) {
       var u = units[i];
       var t = u.t;
@@ -598,6 +599,7 @@
       var orients = typeOrientations(t, allowRotate);
       var xs = [startX];
       var ys = [0];
+      fixed.forEach(function (q) { xs.push(q.x, q.x + q.l); ys.push(q.y, q.y + q.w); });
       placed.forEach(function (q) { xs.push(q.x + q.l); ys.push(q.y + q.w); });
       xs = xs.filter(function (v, idx, arr) { return v >= startX - EPS && arr.indexOf(v) === idx; });
       ys = ys.filter(function (v, idx, arr) { return v >= -EPS && arr.indexOf(v) === idx; });
@@ -608,6 +610,12 @@
             var x = xs[xi], y = ys[yi];
             if (x + o.l > L + EPS || y + o.w > W + EPS) continue;
             var hit = false;
+            for (var fi = 0; fi < fixed.length; fi++) {
+              var f = fixed[fi];
+              if (x < f.x + f.l - EPS && f.x < x + o.l - EPS &&
+                  y < f.y + f.w - EPS && f.y < y + o.w - EPS) { hit = true; break; }
+            }
+            if (hit) continue;
             for (var qi = 0; qi < placed.length; qi++) {
               var q = placed[qi];
               if (x < q.x + q.l - EPS && q.x < x + o.l - EPS &&
@@ -677,8 +685,7 @@
     orders.forEach(function (order) {
       var highs = packUnitsBottomLeft(order, 0, L, W, P.allowRotate);
       if (!highs) return;
-      var highEnd = Math.max.apply(null, highs.map(function (p) { return p.x + p.l; }));
-      var lows = packUnitsBottomLeft(lowUnits, highEnd, L, W, P.allowRotate);
+      var lows = packUnitsBottomLeft(lowUnits, 0, L, W, P.allowRotate, highs);
       if (!lows) return;
       var placements = highs.concat(lows);
       var gap = bottomGapMetric(placements, L, W);
