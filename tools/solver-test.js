@@ -165,7 +165,13 @@ const zoned = scenario('WODA + EUR 叠放优先：单层不夹在叠放中间', 
 validatePlan('ZONED', zoned, c20);
 const highEnd = zoned.ok ? Math.max(...zoned.placements.filter((p) => p.count > 1).map((p) => p.x + p.baseL)) : 0;
 const lowMin = zoned.ok ? Math.min(...zoned.placements.filter((p) => p.count === 1).map((p) => p.x)) : 0;
-check('单层托盘不夹在叠放托盘中间', zoned.ok && lowMin >= highEnd - 1, zoned.ok ? ('低层起点 ' + lowMin + ' / 高层终点 ' + highEnd) : '');
+const lowSandwiched = zoned.ok && zoned.placements.filter((p) => p.count === 1).some((low) => {
+  const yOverlap = (a, b) => a.y < b.y + b.w - 1e-6 && b.y < a.y + a.w - 1e-6;
+  const before = zoned.placements.some((q) => q !== low && q.count > 1 && q.x + q.baseL <= low.x + 1 && yOverlap(q, low));
+  const after = zoned.placements.some((q) => q !== low && q.count > 1 && q.x >= low.x + low.baseL - 1 && yOverlap(q, low));
+  return before && after;
+});
+check('单层托盘不夹在叠放托盘中间', zoned.ok && !lowSandwiched, zoned.ok ? ('低层起点 ' + lowMin + ' / 高层终点 ' + highEnd) : '');
 
 const woda10 = Object.assign({}, woda, { qty: 10 });
 const eur4 = Object.assign({}, eur2, { qty: 4 });

@@ -56,9 +56,12 @@
     this.view = 'iso';
     this.selectedSeq = null;
     this.showUpper = true;
+    this.manualMode = false;
     this.autoRotate = 0;
     this.onAutoRotateChange = null;
     this.onSelect = null;
+    this.onPlacementChange = null;
+    this.onPlacementBlocked = null;
     this.onViewChange = null;
     this._w = 0;
     this._h = 0;
@@ -95,6 +98,74 @@
   Scene.prototype.setSelected = function (seq) {
     this.selectedSeq = seq == null ? null : seq;
     this.requestRender();
+  };
+
+  Scene.prototype.setManualMode = function (v) {
+    this.manualMode = !!v;
+    this.requestRender();
+  };
+
+  Scene.prototype._findPlacement = function (seq) {
+    var m = this.model;
+    if (!m || seq == null) return null;
+    for (var i = 0; i < (m.placements || []).length; i++) {
+      if (m.placements[i].seq === seq) return m.placements[i];
+    }
+    return null;
+  };
+
+  Scene.prototype._canPlace = function (p, x, y, l, w) {
+    var m = this.model;
+    if (!m) return false;
+    if (x < -1e-6 || y < -1e-6 || x + l > m.L + 1e-6 || y + w > m.W + 1e-6) return false;
+    for (var i = 0; i < (m.placements || []).length; i++) {
+      var q = m.placements[i];
+      if (q === p) continue;
+      if (x < q.x + q.l - 1e-6 && q.x < x + l - 1e-6 &&
+          y < q.y + q.w - 1e-6 && q.y < y + w - 1e-6) return false;
+    }
+    return true;
+  };
+
+  // 屏幕点反投影到 z=0 柜底平面，用于把鼠标拖动映射成真实 X/Y 坐标。
+  Scene.prototype._screenToFloor = function (clientX, clientY) {
+    var cam = this._camera();
+    if (!cam || !this.ctx) return null;
+    var canvas = this.ctx.canvas;
+    var rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    var px = (clientX - rect.left) * (this._w / rect.width);
+    var py = (clientY - rect.top) * (this._h / rect.height);
+    var sx = px - (this._w / 2 + this.cam.panX);
+    var sy = (this._h / 2 + this.cam.panY) - py;
+    var dir = add(mul(cam.forward, cam.focal), add(mul(cam.right, sx), mul(cam.up, sy)));
+    if (Math.abs(dir.z) < 1e-6) return null;
+    var t = -cam.eye.z / dir.z;
+    if (t <= 0) return null;
+    return { x: cam.eye.x + dir.x * t, y: cam.eye.y + dir.y * t };
+  };
+
+  Scene.prototype.rotateSelected = function () {
+    var p = this._findPlacement(this.selectedSeq);
+    if (!p) return false;
+    var nl = p.w, nw = p.l;
+    var cx = p.x + p.l / 2, cy = p.y + p.w / 2;
+    var nx = Math.round(cx - nl / 2), ny = Math.round(cy - nw / 2);
+    if (!this._canPlace(p, nx, ny, nl, nw)) return false;
+    p.x = nx; p.y = ny; p.l = nl; p.w = nw;
+    p.baseL = nl; p.baseW = nw;
+    p.rotated = !p.rotated;
+    if (p.layers && p.layers.length) {
+      p.layers.forEach(function (layer) {
+        var ol = layer.l, ow = layer.w;
+        layer.l = ow; layer.w = ol;
+        var rx = layer.relX || 0, ry = layer.relY || 0;
+        layer.relX = ry; layer.relY = rx;
+      });
+    }
+    if (this.onPlacementChange) this.onPlacementChange(p, true);
+    this.requestRender();
+    return true;
   };
 
   Scene.prototype.setShowUpper = function (v) {
@@ -854,6 +925,29 @@
       if (Math.abs(totalDx) + Math.abs(totalDy) > 3) {
         self._drag.moved = true;
       }
+      if (self._drag.mode === 'pallet') {
+        var fp = self._screenToFloor(e.clientX, e.clientY);
+        if (!fp || !self._drag.placement) return;
+        var pl = self._drag.placement;
+        var nx = Math.round((self._drag.startFloor.x + (fp.x - self._drag.startFloor.x)) / 10) * 10;
+        var ny = Math.round((self._drag.startFloor.y + (fp.y - self._drag.startFloor.y)) / 10) * 10;
+        nx = clamp(nx, 0, self.model.L - pl.l);
+        ny = clamp(ny, 0, self.model.W - pl.w);
+        if (self._canPlace(pl, nx, ny, pl.l, pl.w)) {
+          pl.x = nx; pl.y = ny;
+          self._drag.blocked = false;
+          canvas.style.cursor = 'grabbing';
+          if (self.onPlacementChange) self.onPlacementChange(pl, false);
+        } else {
+          if (!self._drag.blocked && self.onPlacementBlocked) self.onPlacementBlocked(pl);
+          self._drag.blocked = true;
+          canvas.style.cursor = 'not-allowed';
+        }
+        self._drag.x = e.clientX;
+        self._drag.y = e.clientY;
+        self.requestRender();
+        return;
+      }
       if (self._drag.mode === 'pan') {
         self.cam.panX += dx;
         self.cam.panY += dy;
@@ -875,6 +969,17 @@
       self._pointers.delete(e.pointerId);
       if (self._pointers.size < 2) self._pinch = null;
       if (self._pointers.size === 0 && self._drag) {
+        if (self._drag.mode === 'pallet') {
+          if (self._drag.moved && self._drag.placement && self.onPlacementChange) {
+            self.onPlacementChange(self._drag.placement, true);
+          }
+          if (canvas.hasPointerCapture && canvas.hasPointerCapture(e.pointerId)) {
+            try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+          }
+          canvas.style.cursor = self.manualMode ? 'grab' : 'grab';
+          self._drag = null;
+          return;
+        }
         if (!wasDrag && e.type === 'pointerup' && self._drag.button === 0) {
           var rect = canvas.getBoundingClientRect();
           var seq = self._pick(e.clientX - rect.left, e.clientY - rect.top);
@@ -904,6 +1009,26 @@
       self._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       var panMode = e.button === 1 || e.button === 2 || e.shiftKey;
       if (self._pointers.size === 1) {
+        var manualSeq = null;
+        if (self.manualMode && !panMode && e.button === 0) {
+          var mrect = canvas.getBoundingClientRect();
+          manualSeq = self._pick(e.clientX - mrect.left, e.clientY - mrect.top);
+        }
+        if (manualSeq != null) {
+          var mp = self._findPlacement(manualSeq);
+          var floor = self._screenToFloor(e.clientX, e.clientY);
+          if (mp && floor) {
+            if (self.onSelect) self.onSelect(manualSeq);
+            self._drag = {
+              x: e.clientX, y: e.clientY, startX: e.clientX, startY: e.clientY,
+              mode: 'pallet', button: e.button, moved: false, blocked: false,
+              placement: mp, startFloor: floor
+            };
+            canvas.style.cursor = 'grabbing';
+            if (e.cancelable) e.preventDefault();
+            return;
+          }
+        }
         self._drag = {
           x: e.clientX,
           y: e.clientY,

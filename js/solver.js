@@ -589,6 +589,115 @@
     return gap;
   }
 
+  function packUnitsBottomLeft(units, startX, L, W, allowRotate) {
+    var placed = [];
+    for (var i = 0; i < units.length; i++) {
+      var u = units[i];
+      var t = u.t;
+      var best = null;
+      var orients = typeOrientations(t, allowRotate);
+      var xs = [startX];
+      var ys = [0];
+      placed.forEach(function (q) { xs.push(q.x + q.l); ys.push(q.y + q.w); });
+      xs = xs.filter(function (v, idx, arr) { return v >= startX - EPS && arr.indexOf(v) === idx; });
+      ys = ys.filter(function (v, idx, arr) { return v >= -EPS && arr.indexOf(v) === idx; });
+      for (var oi = 0; oi < orients.length; oi++) {
+        var o = orients[oi];
+        for (var xi = 0; xi < xs.length; xi++) {
+          for (var yi = 0; yi < ys.length; yi++) {
+            var x = xs[xi], y = ys[yi];
+            if (x + o.l > L + EPS || y + o.w > W + EPS) continue;
+            var hit = false;
+            for (var qi = 0; qi < placed.length; qi++) {
+              var q = placed[qi];
+              if (x < q.x + q.l - EPS && q.x < x + o.l - EPS &&
+                  y < q.y + q.w - EPS && q.y < y + o.w - EPS) { hit = true; break; }
+            }
+            if (hit) continue;
+            if (!best || x < best.x - EPS || (Math.abs(x - best.x) < EPS && y < best.y - EPS)) {
+              best = { x: x, y: y, l: o.l, w: o.w, rotated: o.rotated };
+            }
+          }
+        }
+      }
+      if (!best) return null;
+      placed.push({
+        typeId: t.id, name: t.name, code: t.code, color: t.color, fill: !!t.fill,
+        x: best.x, y: best.y, z: 0, l: best.l, w: best.w, h: t.h, baseH: t.baseH,
+        weight: t.weight, rotated: best.rotated, count: u.count, stackHeight: u.count * t.h,
+        strip: 'M', order: placed.length, baseL: best.l, baseW: best.w
+      });
+    }
+    return placed;
+  }
+
+  function unitsForType(t, high) {
+    var counts = distributeCounts(t.qty, t.stackQty, t.layers) || [];
+    var out = [];
+    counts.forEach(function (c) {
+      if ((c > 1) === !!high) out.push({ t: t, count: c });
+    });
+    return out;
+  }
+
+  function interleaveUnits(types, high) {
+    var queues = types.map(function (t) { return unitsForType(t, high); });
+    var out = [];
+    var more = true;
+    while (more) {
+      more = false;
+      queues.forEach(function (q) {
+        if (q.length) { out.push(q.shift()); more = true; }
+      });
+    }
+    return out;
+  }
+
+  // 不按规格分块：把同类垛位拆开，按柜底利用率与真实碰撞做单元级 Bottom-Left。
+  function buildMixedUnitPlan(P, requiredTypes, fillType, L, W) {
+    if (!requiredTypes.length) return null;
+    var highUnits = [];
+    var lowUnits = [];
+    requiredTypes.forEach(function (t) {
+      highUnits = highUnits.concat(unitsForType(t, true));
+      lowUnits = lowUnits.concat(unitsForType(t, false));
+    });
+    if (!highUnits.length) return null;
+
+    var orders = [];
+    var typeOrders = permutations(requiredTypes, 12);
+    typeOrders.forEach(function (order) {
+      orders.push(interleaveUnits(order, true));
+      orders.push(order.reduce(function (acc, t) { return acc.concat(unitsForType(t, true)); }, []));
+    });
+    orders.push(highUnits.slice().sort(function (a, b) { return b.t.l * b.t.w - a.t.l * a.t.w; }));
+    orders.push(highUnits.slice().sort(function (a, b) { return a.t.l * a.t.w - b.t.l * b.t.w; }));
+
+    var best = null;
+    orders.forEach(function (order) {
+      var highs = packUnitsBottomLeft(order, 0, L, W, P.allowRotate);
+      if (!highs) return;
+      var highEnd = Math.max.apply(null, highs.map(function (p) { return p.x + p.l; }));
+      var lows = packUnitsBottomLeft(lowUnits, highEnd, L, W, P.allowRotate);
+      if (!lows) return;
+      var placements = highs.concat(lows);
+      var gap = bottomGapMetric(placements, L, W);
+      if (!best || gap < best.bottomGap - EPS) {
+        best = {
+          placements: placements,
+          fillCount: 0,
+          fillStacks: 0,
+          stackCount: placements.length,
+          doorClear: Math.max(0, L - Math.max.apply(null, placements.map(function (p) { return p.x + p.l; }))),
+          bottomGap: gap,
+          score: 4e8,
+          stripCount: 1,
+          cut: W
+        };
+      }
+    });
+    return best;
+  }
   function buildDoorPriorityPlan(P, requiredTypes, fillType, L, W) {
     if (!requiredTypes.length) return null;
     var placements = [];
@@ -944,7 +1053,9 @@
       var orders = permutations(requiredTypes, 24);
       var bestBand = null;
       orders.forEach(function (order) {
-        var band = buildDoorPriorityPlan(P, order, fillType, L, W);
+        var band = fillType
+          ? buildDoorPriorityPlan(P, order, fillType, L, W)
+          : buildMixedUnitPlan(P, order, fillType, L, W);
         if (!band) return;
         if (!bestBand ||
             band.fillCount > bestBand.fillCount ||

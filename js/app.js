@@ -20,6 +20,7 @@
     customPresets: [],
     options: { allowRotate: true, gap: 0, allowStack: true, preferSingle: true, doorGap: 0 },
     showUpperLayer: true,
+    manualMode: false,
     autoRotate: 0,
     layout: null,
     selectedSeq: null
@@ -564,6 +565,7 @@
   function calculate(userTriggered) {
     clearTimeout(calcTimer);
     updateStackNote();
+    if (state.manualMode) setManualMode(false, true);
     var c = currentContainer();
     var res;
     try {
@@ -666,6 +668,8 @@
     var el = $('#stageSelection');
     if (el) el.hidden = true;
     if (scene) scene.setSelected(null);
+    var rot = $('#btnRotatePallet');
+    if (rot) rot.hidden = true;
     state.selectedSeq = null;
   }
 
@@ -682,6 +686,58 @@
     $('#selectionSub').textContent = origL + '×' + origW + '×' + origH + ' mm' +
       (p.rotated ? ' · 旋转90°' : '') + (p.count > 1 ? ' · ' + p.count + '层 / 垛高 ' + p.stackHeight + 'mm' : '') + ' · ' + (p.fill ? '补柜' : '必装') + ' · 侧边距 ' + Math.round(p.y) + ' mm';
     $('#stageSelection').hidden = false;
+    var rot = $('#btnRotatePallet');
+    if (rot) rot.hidden = !(state.manualMode && seq);
+  }
+
+  function setManualMode(on, silent) {
+    state.manualMode = !!on;
+    if (scene) scene.setManualMode(state.manualMode);
+    var btn = $('#btnManual');
+    if (btn) {
+      btn.classList.toggle('active', state.manualMode);
+      btn.textContent = state.manualMode ? '退出手动' : '手动';
+    }
+    var rot = $('#btnRotatePallet');
+    if (rot) rot.hidden = !(state.manualMode && state.selectedSeq);
+    var hint = $('.stage-hint');
+    if (hint) hint.textContent = state.manualMode
+      ? '拖托盘移动（碰撞/越界会自动挡住）· 空白处旋转视角 · R 旋转 90°'
+      : '左键旋转 · 右键/Shift 平移 · 滚轮缩放 · 双击复位';
+    if (!silent) toast(state.manualMode ? '手动调整已开启：拖动托盘到空位' : '已退出手动调整');
+  }
+
+  function refreshManualLayout(final) {
+    var res = state.layout;
+    if (!res || !res.ok || !res.placements || !res.placements.length) return;
+    var minX = Infinity, maxX = 0;
+    var used = 0;
+    res.placements.forEach(function (p) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x + p.baseL);
+      used += p.baseL * p.baseW;
+    });
+    if (!isFinite(minX)) minX = 0;
+    res.bottomGap = Math.max(0, minX);
+    res.doorClearance = Math.max(0, currentContainer().l - maxX);
+    res.floorUsed = used;
+    res.floorUtil = res.floorArea ? used / res.floorArea : 0;
+    res.manual = true;
+    updateStageCopy();
+    if (final) {
+      renderResult();
+      buildPrint();
+    }
+  }
+
+  function rotateManualPallet() {
+    if (!state.manualMode || !scene) { toast('先开启“手动”，再选中一个托盘'); return; }
+    if (!state.selectedSeq) { toast('先在 3D 里选中一个托盘'); return; }
+    if (scene.rotateSelected()) {
+      toast('已旋转 90°');
+    } else {
+      toast('这个位置放不下旋转后的托盘，已保持原方向');
+    }
   }
 
   function updateStageCopy() {
@@ -825,6 +881,9 @@
     }
     if (res.strategy === 'min-stack') {
       notes.push('按<strong>不叠放优先</strong>：先把能平放的托盘全部平放，只叠最少的组数；不会为了减少垛位而把整票货都叠起来。');
+    }
+    if (res.manual) {
+      notes.push('当前方案包含<strong>手动拖动/旋转</strong>后的托盘坐标；自动间隙报警仍按系统初始排布计算，现场请再复核。');
     }
     if (res.stackingUsed && res.allowStack) {
       notes.push('叠放规则：<strong>上面托盘的长边和短边都不超过下方托盘</strong>才允许叠放；大托底、小托上可以，反过来不行。');
@@ -1139,6 +1198,8 @@
 
     // 选中托盘
     $('#selectionClose').addEventListener('click', hideSelection);
+    $('#btnManual').addEventListener('click', function () { setManualMode(!state.manualMode); });
+    $('#btnRotatePallet').addEventListener('click', rotateManualPallet);
     $('#stageWrap').addEventListener('click', function (e) {
       if (e.target && e.target.id === 'scene') {
         // 点空白取消选择由 canvas 的 onSelect(null) 处理，这里不重复。
@@ -1152,6 +1213,11 @@
 
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape') hideSelection();
+      var tag = (e.target && e.target.tagName || '').toLowerCase();
+      if ((e.key === 'r' || e.key === 'R') && state.manualMode && tag !== 'input' && tag !== 'textarea' && tag !== 'select') {
+        e.preventDefault();
+        rotateManualPallet();
+      }
     });
   }
 
@@ -1164,6 +1230,12 @@
     scene.onSelect = function (seq) {
       if (seq == null) hideSelection();
       else showSelection(seq);
+    };
+    scene.onPlacementChange = function (p, final) {
+      refreshManualLayout(!!final);
+    };
+    scene.onPlacementBlocked = function () {
+      toast('这个位置会碰到其他托盘或超出柜体，已挡住');
     };
     scene.onViewChange = function (view) {
       $$('#viewSeg button').forEach(function (btn) {

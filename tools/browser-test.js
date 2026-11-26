@@ -266,6 +266,19 @@ async function shot(cdp, name) {
     await sleep(700);
     const prioritySingle = await evaluate(cdp, `({ total: document.querySelector('#resultTotal').textContent, stacking: __CL_DEBUG.state.layout.stackingUsed })`);
 
+    // 手动模式 + 选中托盘旋转
+    await evaluate(cdp, `document.querySelector('#btnManual').click()`);
+    const manual = await evaluate(cdp, `(() => {
+      const active = document.querySelector('#btnManual').classList.contains('active');
+      __CL_DEBUG.scene.setSelected(__CL_DEBUG.state.layout.placements[0].seq);
+      const p = __CL_DEBUG.state.layout.placements[0];
+      const before = { x:p.x, y:p.y, l:p.l, w:p.w };
+      const ok = __CL_DEBUG.scene.rotateSelected();
+      const after = { x:p.x, y:p.y, l:p.l, w:p.w };
+      return { active, ok, before, after, hint: document.querySelector('.stage-hint').textContent };
+    })()`);
+    await evaluate(cdp, `document.querySelector('#btnManual').click()`);
+
     // 混合叠放：1160×1150 底 + 1120×1120 上
     await evaluate(cdp, `(() => {
       __CL_DEBUG.state.pallets = [
@@ -405,6 +418,7 @@ async function shot(cdp, name) {
     console.log('DELETED', JSON.stringify(deleted, null, 2));
     console.log('FILL_TOGGLE', JSON.stringify({ off: fillOff, on: fillOn }, null, 2));
     console.log('PRIORITY', JSON.stringify({ stack: priorityStack, single: prioritySingle }, null, 2));
+    console.log('MANUAL', JSON.stringify(manual, null, 2));
     console.log('MIXED', JSON.stringify(mixedResult, null, 2));
     console.log('WINDMILL', JSON.stringify(windmill, null, 2));
     console.log('LEAST11', JSON.stringify(least11, null, 2));

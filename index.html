@@ -13,7 +13,7 @@
   <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="css/style.css?v=20261126t">
+  <link rel="stylesheet" href="css/style.css?v=20261126v">
 </head>
 <body data-mobile-tab="input">
 
@@ -216,6 +216,8 @@
           <input id="doubleLayer" type="checkbox" checked>
           <span>双层</span>
         </label>
+        <button class="stage-tool" id="btnManual" type="button" title="开启后拖动托盘调整位置；空白处仍可旋转视角">手动</button>
+        <button class="stage-tool" id="btnRotatePallet" type="button" title="选中托盘后旋转 90°（快捷键 R）" hidden>旋转 90°</button>
         <button class="stage-reset" id="btnResetView" type="button" title="重置视角" aria-label="重置视角">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10a8 8 0 1 1 2.3 7.7M4 4v6h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
@@ -376,13 +378,15 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="print-root" id="printRoot"></div>
 
-<script src="js/data.js?v=20261126t"></script>
-<script src="js/solver.js?v=20261126t"></script>
-<script src="js/render3d.js?v=20261126t"></script>
-<script src="js/plan.js?v=20261126t"></script>
-<script src="js/app.js?v=20261126t"></script>
+<script src="js/data.js?v=20261126v"></script>
+<script src="js/solver.js?v=20261126v"></script>
+<script src="js/render3d.js?v=20261126v"></script>
+<script src="js/plan.js?v=20261126v"></script>
+<script src="js/app.js?v=20261126v"></script>
 </body>
 </html>
+
+
 
 
 
