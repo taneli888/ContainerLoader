@@ -56,6 +56,8 @@
     this.view = 'iso';
     this.selectedSeq = null;
     this.showUpper = true;
+    this.autoRotate = 0;
+    this.onAutoRotateChange = null;
     this.onSelect = null;
     this.onViewChange = null;
     this._w = 0;
@@ -100,10 +102,26 @@
     this.requestRender();
   };
 
+  Scene.prototype.setAutoRotate = function (dir) {
+    this.autoRotate = dir === 1 || dir === -1 ? dir : 0;
+    this._tween = null;
+    if (this.autoRotate) {
+      this.view = 'free';
+      if (this.onViewChange) this.onViewChange('free');
+    }
+    if (this.onAutoRotateChange) this.onAutoRotateChange(this.autoRotate);
+    this.requestRender();
+  };
+
   Scene.prototype.setView = function (name, animate) {
+    if (this.autoRotate) {
+      this.autoRotate = 0;
+      if (this.onAutoRotateChange) this.onAutoRotateChange(0);
+    }
     var views = {
       iso: { yaw: -2.32, pitch: this._isoPitch() },
       top: { yaw: -Math.PI / 2, pitch: 1.48 },
+      front: { yaw: Math.PI, pitch: 0.06 },
       side: { yaw: -Math.PI / 2, pitch: 0.055 },
       door: { yaw: Math.PI, pitch: 0.06 }
     };
@@ -135,22 +153,6 @@
 
   Scene.prototype.resetCamera = function () {
     this.setView('iso');
-  };
-
-  Scene.prototype.rotateBy = function (delta) {
-    var y0 = this.cam.yaw;
-    var p0 = this.cam.pitch;
-    this.view = 'free';
-    if (this.onViewChange) this.onViewChange('free');
-    this._tween = {
-      t0: performance.now(),
-      dur: 300,
-      y0: y0,
-      p0: p0,
-      y1: y0 + delta,
-      p1: p0
-    };
-    this.requestRender();
   };
 
   Scene.prototype.resize = function () {
@@ -252,16 +254,16 @@
   Scene.prototype._pill = function (text, x, y, align, color) {
     var ctx = this.ctx;
     ctx.save();
-    ctx.font = '500 10px "Segoe UI", "Microsoft YaHei", sans-serif';
+    ctx.font = '500 11.5px "Segoe UI", "Microsoft YaHei", sans-serif';
     var metrics = ctx.measureText(text);
-    var pad = 6;
+    var pad = 7;
     var w = metrics.width + pad * 2;
-    var h = 20;
+    var h = 22;
     var tx = align === 'right' ? x - w : align === 'center' ? x - w / 2 : x;
     ctx.fillStyle = color || 'rgba(10, 20, 24, .62)';
     this._roundRect(tx, y - h / 2, w, h, 6);
     ctx.fill();
-    ctx.fillStyle = 'rgba(248, 238, 225, .86)';
+    ctx.fillStyle = 'rgba(248, 238, 225, .9)';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, tx + pad, y + .5);
@@ -593,7 +595,7 @@
     if (angle < -Math.PI / 2) angle += Math.PI;
     var cx = (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4;
     var cy = (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4;
-    var font = clamp(minEdge * .17, 6, 12);
+    var font = clamp(minEdge * .17, 7.5, 13.5);
     var ctx = this.ctx;
     ctx.save();
     ctx.translate(cx, cy);
@@ -603,6 +605,7 @@
     ctx.textBaseline = 'middle';
     ctx.fillStyle = 'rgba(255, 249, 238, .72)';
     var label = (p.code || '') + ((p.count || 1) > 1 ? ' ×' + p.count : '');
+    if (label.length > 10) label = label.slice(0, 10) + '…';
     ctx.fillText(label, 0, 0);
     ctx.restore();
   };
@@ -648,6 +651,9 @@
       this.cam.pitch = lerp(tw.p0, tw.p1, k);
       if (t >= 1) this._tween = null;
       else this.requestRender();
+    } else if (this.autoRotate) {
+      this.cam.yaw += this.autoRotate * .0085;
+      this.requestRender();
     }
 
     if (!m) return;
@@ -820,7 +826,9 @@
       if (!self._drag) return;
       var dx = e.clientX - self._drag.x;
       var dy = e.clientY - self._drag.y;
-      if (Math.abs(e.clientX - self._drag.startX) + Math.abs(e.clientY - self._drag.startY) > 3) {
+      var totalDx = e.clientX - self._drag.startX;
+      var totalDy = e.clientY - self._drag.startY;
+      if (Math.abs(totalDx) + Math.abs(totalDy) > 3) {
         self._drag.moved = true;
       }
       if (self._drag.mode === 'pan') {
@@ -828,9 +836,9 @@
         self.cam.panY += dy;
         self._clampPan();
       } else {
-        // 与 Palletizer 相同的方向/灵敏度：右拖向右转，下拖抬高俯视角。
-        self.cam.yaw = self._drag.yaw + dx * .0075;
-        self.cam.pitch = clamp(self._drag.pitch + dy * .006, .06, 1.50);
+        // 用“从按下点到当前点”的总位移，而不是每帧增量，避免小步拖动被吃掉。
+        self.cam.yaw = self._drag.yaw + totalDx * .0075;
+        self.cam.pitch = clamp(self._drag.pitch + totalDy * .006, .06, 1.50);
         self.view = 'free';
         if (self.onViewChange) self.onViewChange('free');
       }
@@ -868,6 +876,7 @@
 
     canvas.addEventListener('pointerdown', function (e) {
       if (e.pointerType === 'mouse' && e.button !== 0 && e.button !== 1 && e.button !== 2) return;
+      if (self.autoRotate) self.setAutoRotate(0);
       try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
       self._pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       var panMode = e.button === 1 || e.button === 2 || e.shiftKey;

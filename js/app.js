@@ -17,8 +17,10 @@
     containerId: '20GP',
     container: { l: 5898, w: 2352, h: 2393, payload: 28200 },
     pallets: [],
+    customPresets: [],
     options: { allowRotate: true, gap: 0, allowStack: true },
     showUpperLayer: true,
+    autoRotate: 0,
     layout: null,
     selectedSeq: null
   };
@@ -92,6 +94,7 @@
       if (!l || !w || !h) return;
       out.push({
         id: String(p.id || uid('p')),
+        presetId: p.presetId ? String(p.presetId) : null,
         name: String(p.name || ('托盘 ' + l + '×' + w)),
         code: String(p.code || (l + '×' + w)),
         l: l, w: w, h: h,
@@ -121,6 +124,21 @@
         payload: Math.max(0, Math.round(Number(saved.container && saved.container.payload) || 0))
       };
       state.pallets = pallets;
+      state.customPresets = Array.isArray(saved.customPresets) ? saved.customPresets.filter(function (p) {
+        return p && p.id && intVal(p.l, 0) && intVal(p.w, 0) && intVal(p.h, 0);
+      }).map(function (p) {
+        return {
+          id: String(p.id),
+          name: String(p.name || '自定义托盘'),
+          code: String(p.code || '自定义'),
+          l: intVal(p.l, 1200),
+          w: intVal(p.w, 800),
+          h: intVal(p.h, 1100),
+          baseH: Math.min(nonNeg(p.baseH, 144), intVal(p.h, 1100)),
+          weight: Math.max(0, Number(p.weight) || 0),
+          custom: true
+        };
+      }) : [];
       state.options.allowRotate = saved.options ? saved.options.allowRotate !== false : true;
       state.options.allowStack = saved.options ? saved.options.allowStack !== false : true;
       state.options.gap = Math.max(0, Math.round(Number(saved.options && saved.options.gap) || 0));
@@ -155,6 +173,7 @@
           containerId: state.containerId,
           container: state.container,
           pallets: state.pallets,
+          customPresets: state.customPresets,
           options: state.options
         }));
       } catch (e) { /* 本地存储不可用时忽略 */ }
@@ -234,11 +253,28 @@
   /* ------------------------------------------------------------------ */
   function buildPresetSelect() {
     var select = $('#presetSelect');
-    var html = '<option value="">从常用规格添加…</option>';
+    var html = '<option value="" disabled selected>从常用规格添加…</option>';
+    html += '<option value="__new__">＋ 新建自定义规格…</option>';
+    html += '<optgroup label="内置常用规格">';
     DATA.palletPresets.forEach(function (p) {
       html += '<option value="' + p.id + '">' + esc(p.name + ' · ' + p.l + '×' + p.w + '×' + p.h) + '</option>';
     });
+    html += '</optgroup>';
+    if (state.customPresets.length) {
+      html += '<optgroup label="我的自定义规格">';
+      state.customPresets.forEach(function (p) {
+        html += '<option value="' + esc(p.id) + '">' + esc(p.name + ' · ' + p.l + '×' + p.w + '×' + p.h + ' · ' + p.code) + '</option>';
+      });
+      html += '</optgroup>';
+    }
     select.innerHTML = html;
+    select.value = '';
+  }
+
+  function findPreset(id) {
+    for (var i = 0; i < DATA.palletPresets.length; i++) if (DATA.palletPresets[i].id === id) return DATA.palletPresets[i];
+    for (var j = 0; j < state.customPresets.length; j++) if (state.customPresets[j].id === id) return state.customPresets[j];
+    return null;
   }
 
   function renderPresetSelect() {
@@ -267,6 +303,11 @@
           '<label><span>宽 mm</span><input type="number" inputmode="numeric" min="1" step="1" data-field="w" value="' + p.w + '"></label>' +
           '<label><span>总高 mm</span><input type="number" inputmode="numeric" min="1" step="1" data-field="h" value="' + p.h + '"></label>' +
         '</div>' +
+        '<div class="pallet-code-row">' +
+          '<span>显示名</span>' +
+          '<input data-field="code" maxlength="10" value="' + esc(p.code || '') + '" placeholder="如 蓝托 / C1" title="3D 和打印图上显示的简短名称">' +
+          '<em>用于 3D / 打印</em>' +
+        '</div>' +
         '<div class="pallet-foot">' +
           (isFill
             ? '<span class="pallet-qty fill-qty">尽量多装</span>'
@@ -289,6 +330,8 @@
     if (!p) return;
     if (field === 'name') {
       p.name = String(value).slice(0, 40) || ('托盘 ' + p.l + '×' + p.w);
+    } else if (field === 'code') {
+      p.code = String(value).slice(0, 10) || ('P' + p.l);
     } else if (field === 'l' || field === 'w' || field === 'h') {
       var n = intVal(value, field === 'h' ? 1100 : 1200);
       p[field] = Math.max(1, n);
@@ -299,6 +342,19 @@
       p.weight = Math.max(0, Math.round(Number(value) || 0));
     }
     if (!p.fill && !p.qty) p.qty = 1;
+    if (p.presetId) {
+      var cp = state.customPresets.filter(function (x) { return x.id === p.presetId; })[0];
+      if (cp) {
+        cp.name = p.name;
+        cp.code = p.code;
+        cp.l = p.l;
+        cp.w = p.w;
+        cp.h = p.h;
+        cp.baseH = p.baseH;
+        cp.weight = p.weight;
+        buildPresetSelect();
+      }
+    }
     if (field === 'h') {
       var layers = layersFor(p);
       var tag = card.querySelector('.pallet-tag');
@@ -309,9 +365,29 @@
   }
 
   function addPallet(source) {
-    var base = source ? clone(source) : {
-      name: '自定义托盘', code: 'CUSTOM', l: 1200, w: 800, h: 1100, baseH: 144, qty: 1, weight: 0
-    };
+    var isNewCustom = !source;
+    var customNumber = state.customPresets.length + 1;
+    var presetId = null;
+    var base;
+    if (source) {
+      base = clone(source);
+      if (source.custom) presetId = source.id;
+    } else {
+      base = {
+        name: '自定义托盘 ' + customNumber,
+        code: '自定义' + customNumber,
+        l: 1200, w: 800, h: 1100, baseH: 144, qty: 1, weight: 0
+      };
+      presetId = uid('cp');
+      state.customPresets.push({
+        id: presetId,
+        name: base.name,
+        code: base.code,
+        l: base.l, w: base.w, h: base.h,
+        baseH: base.baseH, weight: base.weight,
+        custom: true
+      });
+    }
     var used = state.pallets.map(function (p) { return p.color; });
     var color = 0;
     for (var i = 0; i < DATA.colors.length; i++) {
@@ -320,8 +396,9 @@
     }
     state.pallets.push({
       id: uid('p'),
+      presetId: presetId,
       name: base.name || ('托盘 ' + base.l + '×' + base.w),
-      code: base.code || (base.l + '×' + base.w),
+      code: base.code || ('P' + (state.pallets.length + 1)),
       l: intVal(base.l, 1200),
       w: intVal(base.w, 800),
       h: intVal(base.h, 1100),
@@ -332,10 +409,10 @@
       color: color
     });
     renderPalletList();
-    renderPresetSelect();
+    buildPresetSelect();
     saveState();
     calculate(false);
-    if (!source) {
+    if (isNewCustom) {
       setTimeout(function () {
         var cards = $$('.pallet-card');
         var card = cards[cards.length - 1];
@@ -343,7 +420,7 @@
         if (input) { input.focus(); input.select(); }
       }, 60);
     }
-    toast(source ? ('已添加：' + state.pallets[state.pallets.length - 1].name) : '已添加自定义托盘，可直接修改名称和尺寸');
+    toast(isNewCustom ? '已添加自定义托盘：可直接改名、改显示名，并会自动加入下拉列表' : ('已添加：' + state.pallets[state.pallets.length - 1].name));
   }
 
   function removePallet(id) {
@@ -466,6 +543,19 @@
   /* ------------------------------------------------------------------ */
   /* 3D                                                                  */
   /* ------------------------------------------------------------------ */
+  function updateAutoButtons() {
+    var ccw = $('#btnRotateCCW');
+    var cw = $('#btnRotateCW');
+    if (ccw) {
+      ccw.classList.toggle('active', state.autoRotate === -1);
+      ccw.setAttribute('aria-pressed', state.autoRotate === -1 ? 'true' : 'false');
+    }
+    if (cw) {
+      cw.classList.toggle('active', state.autoRotate === 1);
+      cw.setAttribute('aria-pressed', state.autoRotate === 1 ? 'true' : 'false');
+    }
+  }
+
   function updateLayerToggle(res) {
     var input = $('#doubleLayer');
     var label = $('#layerToggle span');
@@ -858,7 +948,7 @@
       var card = el.closest('.pallet-card');
       if (!card) return;
       updatePalletFromCard(card, field, el.value);
-      if (field === 'l' || field === 'w' || field === 'h' || field === 'qty' || field === 'weight') {
+      if (field === 'name' || field === 'code' || field === 'l' || field === 'w' || field === 'h' || field === 'qty' || field === 'weight') {
         // 不在输入过程中重建列表，避免光标丢失；计算结果会更新右侧。
         scheduleCalc();
       }
@@ -886,7 +976,12 @@
     $('#btnAddPreset').addEventListener('click', function () {
       var id = $('#presetSelect').value;
       if (!id) { toast('先选择一个常用托盘规格'); return; }
-      var preset = DATA.palletPresets.filter(function (p) { return p.id === id; })[0];
+      if (id === '__new__') {
+        addPallet(null);
+        $('#presetSelect').value = '';
+        return;
+      }
+      var preset = findPreset(id);
       if (preset) addPallet(preset);
       $('#presetSelect').value = '';
     });
@@ -930,10 +1025,12 @@
       if (scene) scene.resetCamera();
     });
     $('#btnRotateCCW').addEventListener('click', function () {
-      if (scene) scene.rotateBy(-Math.PI / 12);
+      if (!scene) return;
+      scene.setAutoRotate(state.autoRotate === -1 ? 0 : -1);
     });
     $('#btnRotateCW').addEventListener('click', function () {
-      if (scene) scene.rotateBy(Math.PI / 12);
+      if (!scene) return;
+      scene.setAutoRotate(state.autoRotate === 1 ? 0 : 1);
     });
     $('#doubleLayer').addEventListener('change', function (e) {
       state.showUpperLayer = !!e.target.checked;
@@ -973,11 +1070,15 @@
         btn.classList.toggle('active', btn.getAttribute('data-view') === view);
       });
     };
+    scene.onAutoRotateChange = function (dir) {
+      state.autoRotate = dir || 0;
+      updateAutoButtons();
+    };
+    updateAutoButtons();
   }
 
   function init() {
     buildContainerSelect();
-    buildPresetSelect();
     if (!loadState()) {
       var ex = clone(DATA.example);
       state.containerId = ex.containerId;
@@ -985,6 +1086,7 @@
       state.pallets = ex.pallets;
       state.options = ex.options;
     }
+    buildPresetSelect();
     syncInputs();
     renderPalletList();
     initScene();
@@ -999,6 +1101,9 @@
     };
     // 确保首次渲染后 3D 尺寸正确
     setTimeout(function () { if (scene) { scene.resize(); scene.requestRender(); } }, 80);
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    }
   }
 
   if (document.readyState === 'loading') {

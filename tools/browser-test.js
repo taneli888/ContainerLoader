@@ -122,8 +122,11 @@ async function shot(cdp, name) {
     const box = await evaluate(cdp, `(() => { const r=document.querySelector('#scene').getBoundingClientRect(); return {x:r.left+r.width/2,y:r.top+r.height/2}; })()`);
     const cam0 = await evaluate(cdp, `({ yaw: __CL_DEBUG.scene.cam.yaw, pitch: __CL_DEBUG.scene.cam.pitch, panX: __CL_DEBUG.scene.cam.panX, panY: __CL_DEBUG.scene.cam.panY, zoom: __CL_DEBUG.scene.cam.zoom })`);
     await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: box.x, y: box.y, button: 'left', clickCount: 1 });
-    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x + 90, y: box.y + 40, button: 'left', buttons: 1 });
-    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: box.x + 90, y: box.y + 40, button: 'left', clickCount: 1 });
+    for (let i = 1; i <= 6; i++) {
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x + i * 15, y: box.y + i * 7, button: 'left', buttons: 1 });
+      await sleep(25);
+    }
+    await cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: box.x + 90, y: box.y + 42, button: 'left', clickCount: 1 });
     await sleep(250);
     const camOrbit = await evaluate(cdp, `({ yaw: __CL_DEBUG.scene.cam.yaw, pitch: __CL_DEBUG.scene.cam.pitch })`);
     await cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: box.x, y: box.y, button: 'left', clickCount: 1, modifiers: 8 });
@@ -147,14 +150,21 @@ async function shot(cdp, name) {
     await evaluate(cdp, `document.querySelector('#doubleLayer').click()`);
     await sleep(250);
 
-    // 顺时针 / 逆时针按钮
+    // 顺时针 / 逆时针按钮：按一次持续旋转，再按停止
     const yaw0 = await evaluate(cdp, `__CL_DEBUG.scene.cam.yaw`);
     await evaluate(cdp, `document.querySelector('#btnRotateCCW').click()`);
-    await sleep(450);
-    const yawCCW = await evaluate(cdp, `__CL_DEBUG.scene.cam.yaw`);
+    await sleep(650);
+    const yawCCW = await evaluate(cdp, `({ yaw: __CL_DEBUG.scene.cam.yaw, active: document.querySelector('#btnRotateCCW').classList.contains('active'), auto: __CL_DEBUG.scene.autoRotate })`);
+    await evaluate(cdp, `document.querySelector('#btnRotateCCW').click()`);
+    await sleep(250);
+    const yawStopped1 = await evaluate(cdp, `__CL_DEBUG.scene.cam.yaw`);
+    await sleep(300);
+    const yawStopped2 = await evaluate(cdp, `__CL_DEBUG.scene.cam.yaw`);
     await evaluate(cdp, `document.querySelector('#btnRotateCW').click()`);
-    await sleep(450);
-    const yawCW = await evaluate(cdp, `__CL_DEBUG.scene.cam.yaw`);
+    await sleep(500);
+    const yawCW = await evaluate(cdp, `({ yaw: __CL_DEBUG.scene.cam.yaw, active: document.querySelector('#btnRotateCW').classList.contains('active'), auto: __CL_DEBUG.scene.autoRotate })`);
+    await evaluate(cdp, `document.querySelector('#btnRotateCW').click()`);
+    await sleep(250);
 
     // 视角切换
     await evaluate(cdp, `document.querySelector('#viewSeg button[data-view="top"]').click()`);
@@ -207,12 +217,13 @@ async function shot(cdp, name) {
       firstQty.value='8'; firstQty.dispatchEvent(new Event('input',{bubbles:true}));
       const card = cards[cards.length-1];
       const set = (f,v) => { const el = card.querySelector('[data-field="'+f+'"]'); el.value=v; el.dispatchEvent(new Event('input',{bubbles:true})); };
-      set('name','自定义 1000×700');
+      set('name','蓝托 1000×700');
+      set('code','BLUE');
       set('l','1000'); set('w','700'); set('h','1000'); set('qty','4');
       return { cards: cards.length };
     })()`);
     await sleep(900);
-    const customResult = await evaluate(cdp, `({ cards: document.querySelectorAll('.pallet-card').length, total: document.querySelector('#resultTotal').textContent, errorHidden: document.querySelector('#resultError').hidden, typeRows: document.querySelectorAll('.type-row').length })`);
+    const customResult = await evaluate(cdp, `({ cards: document.querySelectorAll('.pallet-card').length, total: document.querySelector('#resultTotal').textContent, errorHidden: document.querySelector('#resultError').hidden, error: document.querySelector('#errorText').textContent, typeRows: document.querySelectorAll('.type-row').length, code: __CL_DEBUG.state.pallets[2].code, name: __CL_DEBUG.state.pallets[2].name, presetText: [...document.querySelectorAll('#presetSelect option')].map(o=>o.textContent).join(' | ') })`);
     await shot(cdp, 'desktop-custom-cdp.png');
     await evaluate(cdp, `(() => { const cards=document.querySelectorAll('.pallet-card'); cards[cards.length-1].querySelector('.pallet-remove').click(); })()`);
     await sleep(700);
@@ -303,7 +314,7 @@ async function shot(cdp, name) {
     console.log('SELECTED', JSON.stringify(selected, null, 2));
     console.log('CAMERA', JSON.stringify({ before: cam0, orbit: camOrbit, pan: camPan, zoom: camZoom, reset: camReset }, null, 2));
     console.log('LAYER', JSON.stringify({ on: layerOn, off: layerOff }, null, 2));
-    console.log('ROTATE_BUTTONS', JSON.stringify({ yaw0, yawCCW, yawCW }, null, 2));
+    console.log('ROTATE_BUTTONS', JSON.stringify({ yaw0, yawCCW, stopped: [yawStopped1, yawStopped2], yawCW }, null, 2));
     console.log('40HQ', JSON.stringify(hq, null, 2));
     console.log('GAP20', JSON.stringify(gap, null, 2));
     console.log('ERROR_STATE', JSON.stringify(error, null, 2));
