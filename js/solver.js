@@ -536,6 +536,59 @@
     return remain === 0 ? out : null;
   }
 
+  // 柜底侧空缝评分：越低越好；靠柜底的空缝权重更高，柜门侧允许留空。
+  function permutations(items, limit) {
+    limit = limit || 24;
+    var out = [];
+    function walk(rest, acc) {
+      if (out.length >= limit) return;
+      if (!rest.length) { out.push(acc.slice()); return; }
+      for (var i = 0; i < rest.length && out.length < limit; i++) {
+        var next = rest.slice();
+        var pick = next.splice(i, 1)[0];
+        acc.push(pick);
+        walk(next, acc);
+        acc.pop();
+      }
+    }
+    walk(items, []);
+    return out;
+  }
+
+  function bottomGapMetric(placements, L, W) {
+    if (!placements.length) return 0;
+    var maxX = 0;
+    placements.forEach(function (p) { maxX = Math.max(maxX, p.x + p.l); });
+    if (maxX <= 0) return 0;
+    var xs = [0, maxX];
+    placements.forEach(function (p) { xs.push(p.x, p.x + p.l); });
+    xs = xs.filter(function (v) { return v >= -EPS && v <= maxX + EPS; })
+      .sort(function (a, b) { return a - b; });
+    var unique = [];
+    xs.forEach(function (v) { if (!unique.length || Math.abs(v - unique[unique.length - 1]) > EPS) unique.push(v); });
+    var gap = 0;
+    for (var i = 0; i < unique.length - 1; i++) {
+      var a = unique[i], b = unique[i + 1];
+      if (b - a <= EPS) continue;
+      var mid = (a + b) / 2;
+      var spans = [];
+      placements.forEach(function (p) {
+        if (p.x < mid && p.x + p.l > mid) spans.push([p.y, p.y + p.w]);
+      });
+      spans.sort(function (x, y) { return x[0] - y[0]; });
+      var covered = 0, curS = -1, curE = -1;
+      spans.forEach(function (s) {
+        if (curS < 0) { curS = s[0]; curE = s[1]; }
+        else if (s[0] <= curE + EPS) curE = Math.max(curE, s[1]);
+        else { covered += curE - curS; curS = s[0]; curE = s[1]; }
+      });
+      if (curS >= 0) covered += curE - curS;
+      var weight = 1 + (1 - mid / maxX); // 柜底侧权重 2，柜门侧权重 1
+      gap += Math.max(0, W - covered) * (b - a) * weight;
+    }
+    return gap;
+  }
+
   function buildDoorPriorityPlan(P, requiredTypes, fillType, L, W) {
     if (!requiredTypes.length) return null;
     var placements = [];
@@ -556,11 +609,6 @@
     }
 
     var groups = highGroups.concat(lowGroups);
-    // 高层垛按底面积从小到大先放：小规格先贴柜底，填掉大规格之间容易出现的碎片空位。
-    highGroups.sort(function (a, b) {
-      return a.t.l * a.t.w - b.t.l * b.t.w;
-    });
-    groups = highGroups.concat(lowGroups);
     for (var gi = 0; gi < groups.length; gi++) {
       var g = groups[gi];
       var gt = g.t;
@@ -630,6 +678,7 @@
       stackCount: placements.length,
       doorClear: Math.max(0, L - Math.max.apply(null, placements.map(function (p) { return p.x + p.l; }))),
       score: fillCount * 1e12 + 4e8,
+      bottomGap: bottomGapMetric(placements, L, W),
       stripCount: 1,
       cut: W
     };
@@ -812,6 +861,7 @@
         fillStacks: fillStacks,
         stackCount: placements.length,
         doorClear: doorClear,
+        bottomGap: bottomGapMetric(placements, L, W),
         score: score,
         stripCount: strips.length,
         cut: strips.length === 1 ? W : strips[1].y0
@@ -879,6 +929,7 @@
             fillStacks: 0,
             stackCount: windPlaces.length,
             doorClear: 0,
+            bottomGap: bottomGapMetric(windPlaces, L, W),
             score: 5e7,
             stripCount: 1,
             cut: W
@@ -888,16 +939,21 @@
       }
     }
 
-    // 4) 多规格：按装柜顺序分带，后装规格靠近柜门。
+    // 4) 多规格：尝试不同的规格先后顺序，选择“柜底侧空缝最小”的方案。
     if (requiredTypes.length >= 2) {
-      var doorBand = buildDoorPriorityPlan(P, requiredTypes, fillType, L, W);
-      if (doorBand) {
-        if (!best || doorBand.fillCount > best.fillCount) {
-          best = doorBand;
-        } else if (doorBand.fillCount === best.fillCount) {
-          // 数量相同，柜门优先方案胜出；后装规格会落在更靠柜门的位置。
-          best = doorBand;
+      var orders = permutations(requiredTypes, 24);
+      var bestBand = null;
+      orders.forEach(function (order) {
+        var band = buildDoorPriorityPlan(P, order, fillType, L, W);
+        if (!band) return;
+        if (!bestBand ||
+            band.fillCount > bestBand.fillCount ||
+            (band.fillCount === bestBand.fillCount && band.bottomGap < bestBand.bottomGap - EPS)) {
+          bestBand = band;
         }
+      });
+      if (bestBand && (!best || bestBand.fillCount >= best.fillCount)) {
+        best = bestBand;
       }
     }
 

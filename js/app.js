@@ -839,7 +839,7 @@
     notes.push('共 <strong>' + res.stackCount + ' 个垛位</strong>，必装参与 ' + res.requiredStacks + ' 垛 + 补柜纯垛 ' + res.fillStacks + ' 垛' + (res.mixedStacks ? '；其中混合叠放 ' + res.mixedStacks + ' 垛' : '') + '。');
     if (res.mixedStacks) notes.push('本方案使用了混合叠放，因此不按单一规格的面积上限判断最优。');
     if (state.pallets.length > 1 && res.placements && res.placements.length) {
-      notes.push('多规格会全局重排：多层垛先集中柜底，单层垛集中柜门侧；大托之间的小空隙优先用小规格高层垛填充，不保留内部空框。');
+      notes.push('多规格会全局重排：多层垛先集中柜底，单层垛集中柜门侧；会尝试不同规格顺序，选择柜底宽度覆盖最大、内部空缝最小的方案。');
     }
     var cm = scene && scene._cargoMetrics ? scene._cargoMetrics() : null;
     if (cm) {

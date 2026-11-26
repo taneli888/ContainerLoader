@@ -155,11 +155,8 @@ const stack11 = scenario('20GP 11 托 1200×1000 叠放优先', c20, [eur2x11], 
 check('11 托叠放优先：5 个双层 + 1 个单层', stack11.ok && stack11.stackCount === 6 && stack11.placements.filter((p) => p.count === 2).length === 5, stack11.ok ? stack11.placements.map((p) => p.count).join(',') : '');
 
 const small2 = { id: 's2', name: 'SMALL 1000×700', code: 'SM', l: 1000, w: 700, h: 1000, baseH: 144, qty: 2, weight: 0, fill: false, color: 1 };
-const multiDoor = scenario('20GP 8 EUR + 2 SMALL（后装规格靠柜门）', c20, [eur, small2]);
+const multiDoor = scenario('20GP 8 EUR + 2 SMALL（多规格全局重排）', c20, [eur, small2]);
 validatePlan('MULTI', multiDoor, c20);
-const eurMaxX = multiDoor.ok ? Math.max(...multiDoor.placements.filter((p) => p.typeId === eur.id).map((p) => p.x + p.baseL)) : 0;
-const smMinX = multiDoor.ok ? Math.min(...multiDoor.placements.filter((p) => p.typeId === small2.id).map((p) => p.x)) : 0;
-check('多规格后装规格在柜门侧', multiDoor.ok && smMinX >= eurMaxX - 1, multiDoor.ok ? ('SM ' + smMinX + ' / EUR end ' + eurMaxX) : '');
 check('多规格总托数 10', multiDoor.ok && multiDoor.totalCount === 10, multiDoor.ok ? String(multiDoor.totalCount) : '');
 
 const woda = { id: 'woda', name: 'WODA', code: 'WODA', l: 1130, w: 1130, h: 1100, baseH: 144, qty: 7, weight: 0, fill: false, color: 0 };
@@ -172,11 +169,11 @@ check('单层托盘不夹在叠放托盘中间', zoned.ok && lowMin >= highEnd -
 
 const woda10 = Object.assign({}, woda, { qty: 10 });
 const eur4 = Object.assign({}, eur2, { qty: 4 });
-const gapFix = scenario('WODA10 + EUR4：EUR 先贴柜底填红框', c20, [woda10, eur4], { allowRotate: true, gap: 0, allowStack: true, preferSingle: false, doorGap: 0 });
+const gapFix = scenario('WODA10 + EUR4：柜底利用率优先', c20, [woda10, eur4], { allowRotate: true, gap: 0, allowStack: true, preferSingle: false, doorGap: 0 });
 validatePlan('GAPFIX', gapFix, c20);
 const eurMin = gapFix.ok ? Math.min(...gapFix.placements.filter((p) => p.typeId === 'eur2').map((p) => p.x)) : 0;
 const wodaMin = gapFix.ok ? Math.min(...gapFix.placements.filter((p) => p.typeId === 'woda').map((p) => p.x)) : 0;
-check('EUR 先贴柜底，WODA 接在后面', gapFix.ok && eurMin === 0 && wodaMin >= 1200, gapFix.ok ? ('EUR ' + eurMin + ' / WODA ' + wodaMin) : '');
+check('WODA 先填柜底，EUR 接在后面', gapFix.ok && wodaMin === 0 && eurMin >= 2260, gapFix.ok ? ('WODA ' + wodaMin + ' / EUR ' + eurMin) : '');
 check('WODA10+EUR4 实装 4590mm', gapFix.ok && Math.max(...gapFix.placements.map((p) => p.x + p.baseL)) === 4590, gapFix.ok ? String(Math.max(...gapFix.placements.map((p) => p.x + p.baseL))) : '');
 
 console.log('\n结果：' + passed + ' 通过，' + failed + ' 失败');
