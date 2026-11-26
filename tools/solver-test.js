@@ -170,5 +170,14 @@ const highEnd = zoned.ok ? Math.max(...zoned.placements.filter((p) => p.count > 
 const lowMin = zoned.ok ? Math.min(...zoned.placements.filter((p) => p.count === 1).map((p) => p.x)) : 0;
 check('单层托盘不夹在叠放托盘中间', zoned.ok && lowMin >= highEnd - 1, zoned.ok ? ('低层起点 ' + lowMin + ' / 高层终点 ' + highEnd) : '');
 
+const woda10 = Object.assign({}, woda, { qty: 10 });
+const eur4 = Object.assign({}, eur2, { qty: 4 });
+const gapFix = scenario('WODA10 + EUR4：EUR 先贴柜底填红框', c20, [woda10, eur4], { allowRotate: true, gap: 0, allowStack: true, preferSingle: false, doorGap: 0 });
+validatePlan('GAPFIX', gapFix, c20);
+const eurMin = gapFix.ok ? Math.min(...gapFix.placements.filter((p) => p.typeId === 'eur2').map((p) => p.x)) : 0;
+const wodaMin = gapFix.ok ? Math.min(...gapFix.placements.filter((p) => p.typeId === 'woda').map((p) => p.x)) : 0;
+check('EUR 先贴柜底，WODA 接在后面', gapFix.ok && eurMin === 0 && wodaMin >= 1200, gapFix.ok ? ('EUR ' + eurMin + ' / WODA ' + wodaMin) : '');
+check('WODA10+EUR4 实装 4590mm', gapFix.ok && Math.max(...gapFix.placements.map((p) => p.x + p.baseL)) === 4590, gapFix.ok ? String(Math.max(...gapFix.placements.map((p) => p.x + p.baseL))) : '');
+
 console.log('\n结果：' + passed + ' 通过，' + failed + ' 失败');
 process.exit(failed ? 1 : 0);

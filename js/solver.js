@@ -556,6 +556,11 @@
     }
 
     var groups = highGroups.concat(lowGroups);
+    // 高层垛按底面积从小到大先放：小规格先贴柜底，填掉大规格之间容易出现的碎片空位。
+    highGroups.sort(function (a, b) {
+      return a.t.l * a.t.w - b.t.l * b.t.w;
+    });
+    groups = highGroups.concat(lowGroups);
     for (var gi = 0; gi < groups.length; gi++) {
       var g = groups[gi];
       var gt = g.t;
