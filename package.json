@@ -1,0 +1,11 @@
+{
+  "name": "container-loader",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Container Loader — 集装箱托盘装柜测算、3D 演示与 A4 打印示意图",
+  "scripts": {
+    "test": "node tools/solver-test.js",
+    "test:ui": "node tools/browser-test.js",
+    "serve": "python -m http.server 8777 --bind 127.0.0.1"
+  }
+}

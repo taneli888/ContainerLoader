@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#17242b">
+  <meta name="description" content="Container Loader — 集装箱装柜测算台：内置常见箱型与托盘规格，计算必装 + 补柜数量，生成 3D 装柜演示和 A4 打印示意图。">
+  <title>Container Loader · 集装箱装柜测算台</title>
+  <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
+  <link rel="apple-touch-icon" href="icons/icon-180.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="css/style.css?v=20261126a">
+</head>
+<body data-mobile-tab="input">
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 32 32">
+        <path d="M6 10.5 16 5l10 5.5v11L16 27 6 21.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+        <path d="M6 10.5 16 16l10-5.5M16 16v11" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" opacity=".8"/>
+        <path d="M11 13.2v6.2M21 13.2v6.2" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity=".65"/>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <h1>Container Loader</h1>
+      <p>集装箱装柜测算台</p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <span class="local-pill"><i></i>本地计算</span>
+    <button class="btn ghost hide-sm" id="btnExample" type="button">恢复示例</button>
+    <button class="btn ghost" id="btnPrintTop" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+      打印
+    </button>
+    <button class="btn primary hide-sm" id="btnCalcTop" type="button">计算方案</button>
+  </div>
+</header>
+
+<main class="workspace">
+  <!-- ------------------------------------------------------------------ -->
+  <!-- 录入                                                               -->
+  <!-- ------------------------------------------------------------------ -->
+  <aside class="panel input-panel" id="panelInput">
+    <div class="panel-scroll">
+      <section class="section container-section">
+        <div class="section-head">
+          <div class="section-title">
+            <span class="section-kicker">01</span>
+            <h2>柜型与内尺寸</h2>
+          </div>
+          <button class="text-btn" id="btnResetContainer" type="button">标准值</button>
+        </div>
+
+        <div class="container-tabs" id="containerTabs">
+          <button type="button" data-container="20GP" class="active">
+            <b>20GP</b><span>5.90 × 2.35m</span>
+          </button>
+          <button type="button" data-container="40GP">
+            <b>40GP</b><span>12.03 × 2.35m</span>
+          </button>
+          <button type="button" data-container="40HQ">
+            <b>40HQ</b><span>12.03 × 2.35m</span>
+          </button>
+          <button type="button" data-container="45HQ">
+            <b>45HQ</b><span>13.56 × 2.35m</span>
+          </button>
+        </div>
+
+        <label class="select-line">
+          <span>其他箱型</span>
+          <select id="containerSelect" aria-label="选择其他箱型"></select>
+        </label>
+
+        <div class="dim-grid">
+          <label class="field">
+            <span>内长 <em>mm</em></span>
+            <input id="cL" type="number" inputmode="numeric" min="1" step="1" value="5898">
+          </label>
+          <label class="field">
+            <span>内宽 <em>mm</em></span>
+            <input id="cW" type="number" inputmode="numeric" min="1" step="1" value="2352">
+          </label>
+          <label class="field">
+            <span>内高 <em>mm</em></span>
+            <input id="cH" type="number" inputmode="numeric" min="1" step="1" value="2393">
+          </label>
+          <label class="field">
+            <span>载重 <em>kg</em></span>
+            <input id="cPayload" type="number" inputmode="numeric" min="0" step="10" value="28200">
+          </label>
+        </div>
+
+        <div class="container-meta">
+          <span id="containerVolume">柜内容积 33.2 m³</span>
+          <span id="containerDoor">门宽 2340 × 门高 2280</span>
+        </div>
+        <p class="micro" id="containerNote">最常见的普柜，适合单层托盘、拼柜货。</p>
+      </section>
+
+      <section class="section pallet-section">
+        <div class="section-head">
+          <div class="section-title">
+            <span class="section-kicker">02</span>
+            <h2>托盘清单</h2>
+          </div>
+          <span class="head-hint">必装 / 补柜</span>
+        </div>
+
+        <div class="pallet-list" id="palletList"></div>
+
+        <div class="preset-row">
+          <select id="presetSelect" aria-label="选择常用托盘规格"></select>
+          <button class="btn ghost compact" id="btnAddPreset" type="button">添加规格</button>
+        </div>
+        <button class="add-custom" id="btnAddCustom" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          新建自定义托盘
+        </button>
+        <p class="micro">添加后可直接改名称和尺寸；卡片右上角垃圾桶可删除。</p>
+      </section>
+
+      <section class="section options-section">
+        <div class="section-head">
+          <div class="section-title">
+            <span class="section-kicker">03</span>
+            <h2>装载参数</h2>
+          </div>
+          <span class="head-hint" id="stackHeadHint">同规格叠放</span>
+        </div>
+
+        <label class="switch-row">
+          <span>
+            <b>允许同规格叠放</b>
+            <small>按柜内净高自动算层数；不同规格不混叠</small>
+          </span>
+          <input id="allowStack" type="checkbox" checked>
+          <i class="switch"></i>
+        </label>
+
+        <label class="switch-row">
+          <span>
+            <b>允许旋转 90°</b>
+            <small>长边与宽边可以互换，通常能多装</small>
+          </span>
+          <input id="allowRotate" type="checkbox" checked>
+          <i class="switch"></i>
+        </label>
+
+        <label class="inline-field">
+          <span>托盘间隙 <small>mm</small></span>
+          <input id="gapInput" type="number" inputmode="numeric" min="0" max="200" step="5" value="0">
+        </label>
+        <p class="micro">间隙会同时加到每个托盘的长、宽上；实际装柜建议预留 10–30mm。</p>
+
+        <div class="single-layer-note" id="stackNote">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5-8 4.5zM4 12l8 4.5 8-4.5M4 15.5 12 20l8-4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+          <span>同规格上下叠放，层数按 2393mm 柜内净高自动计算；不同规格不混叠。</span>
+        </div>
+      </section>
+
+      <button class="cta" id="btnCalc" type="button">
+        <span>计算装载方案</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h13m0 0-5-5m5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <p class="input-hint" id="inputHint">8 托必装 + 补柜规格，自动求最多能加多少托。</p>
+    </div>
+  </aside>
+
+  <!-- ------------------------------------------------------------------ -->
+  <!-- 3D                                                                 -->
+  <!-- ------------------------------------------------------------------ -->
+  <section class="stage-panel" id="panelView">
+    <header class="stage-head">
+      <div class="stage-title">
+        <span class="stage-kicker">LIVE LOAD PLAN</span>
+        <h2 id="stageTitle">20GP · 装柜预览</h2>
+      </div>
+      <div class="seg" id="viewSeg" role="group" aria-label="视角">
+        <button data-view="iso" class="active" type="button">等轴测</button>
+        <button data-view="top" type="button">俯视</button>
+        <button data-view="side" type="button">侧视</button>
+        <button data-view="door" type="button">柜门</button>
+      </div>
+      <label class="layer-toggle" id="layerToggle" title="显示叠放的上层托盘">
+        <input id="doubleLayer" type="checkbox" checked>
+        <span>双层</span>
+      </label>
+      <button class="stage-reset" id="btnResetView" type="button" title="重置视角" aria-label="重置视角">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10a8 8 0 1 1 2.3 7.7M4 4v6h6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </header>
+
+    <div class="stage" id="stageWrap">
+      <canvas id="scene"></canvas>
+      <div class="stage-badge" id="sceneBadge">等待计算</div>
+      <div class="stage-dims" id="sceneDims"></div>
+      <div class="stage-empty" id="sceneEmpty">
+        <div class="empty-icon">
+          <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 20 32 8l24 12v24L32 56 8 44zM8 20l24 12 24-12M32 32v24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        </div>
+        <b>还没有装载方案</b>
+        <span>填写柜型和托盘后，点“计算装载方案”。</span>
+      </div>
+      <div class="stage-hint">左键旋转 · 右键/Shift 平移 · 滚轮缩放 · 双击复位</div>
+      <div class="orbit-controls" aria-label="旋转视角">
+        <button id="btnRotateCCW" type="button" title="逆时针旋转" aria-label="逆时针旋转">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8a8 8 0 1 0 2.4 9.7M5 4v5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="btnRotateCW" type="button" title="顺时针旋转" aria-label="顺时针旋转">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 8a8 8 0 1 1-2.4 9.7M19 4v5h-5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+      <div class="stage-legend" id="stageLegend"></div>
+      <div class="stage-selection" id="stageSelection" hidden>
+        <button id="selectionClose" type="button" aria-label="关闭">×</button>
+        <span class="selection-dot" id="selectionDot"></span>
+        <div>
+          <b id="selectionTitle">—</b>
+          <small id="selectionSub">—</small>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-foot">
+      <div class="foot-metric">
+        <span>地面利用率</span>
+        <b id="footFloor">—</b>
+        <i><em id="footFloorBar" style="width:0%"></em></i>
+      </div>
+      <div class="foot-metric">
+        <span>体积利用率</span>
+        <b id="footVolume">—</b>
+        <i><em id="footVolumeBar" style="width:0%"></em></i>
+      </div>
+      <div class="foot-metric plain">
+        <span>总重</span>
+        <b id="footWeight">—</b>
+      </div>
+      <div class="foot-metric plain">
+        <span>剩余柜底</span>
+        <b id="footFree">—</b>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------------ -->
+  <!-- 结果                                                               -->
+  <!-- ------------------------------------------------------------------ -->
+  <aside class="panel result-panel" id="panelResult">
+    <div class="panel-scroll">
+      <section class="result-hero">
+        <div class="result-hero-top">
+          <span>装载结果</span>
+          <span id="resultContainer" class="mini-chip">20GP</span>
+        </div>
+        <div class="result-number">
+          <span id="resultTotal">—</span><small>托</small>
+        </div>
+        <p class="result-sub" id="resultSub">等待计算</p>
+        <div class="result-split" id="resultSplit">
+          <div><b id="resultRequired">—</b><span>必装已放入</span></div>
+          <div id="resultFillItem"><b id="resultFill">—</b><span>补柜可加</span></div>
+          <div><b id="resultUtil">—</b><span>地面利用率</span></div>
+        </div>
+      </section>
+
+      <section class="result-error" id="resultError" hidden>
+        <b id="errorTitle">装不下</b>
+        <p id="errorText"></p>
+        <ul id="errorList"></ul>
+      </section>
+
+      <section class="clearance-alert" id="clearanceAlert" hidden>
+        <div class="clearance-head">
+          <b>⚠ 间隙报警</b>
+          <span id="clearanceCount">—</span>
+        </div>
+        <ul id="clearanceList"></ul>
+        <p class="clearance-note">宽向余量 &lt; 80mm 或长向余量 &lt; 200mm 时提示，请现场复核叉车/绑扎空间。</p>
+      </section>
+
+      <section class="result-section" id="resultMain">
+        <div class="section-head">
+          <h3>方案结论</h3>
+          <span class="result-badge" id="resultBadge">—</span>
+        </div>
+        <p class="verdict" id="verdict">—</p>
+        <div class="stat-grid">
+          <div><span>柜内容积</span><b id="statVolume">—</b></div>
+          <div><span>已用柜底</span><b id="statFloor">—</b></div>
+          <div><span>总重量</span><b id="statWeight">—</b></div>
+          <div><span>最高垛</span><b id="statHeight">—</b></div>
+        </div>
+      </section>
+
+      <section class="result-section" id="resultTypes">
+        <div class="section-head">
+          <h3>装载明细</h3>
+          <span class="head-hint" id="typeCount">—</span>
+        </div>
+        <div class="type-list" id="typeList"></div>
+      </section>
+
+      <section class="result-section" id="resultNotes">
+        <div class="section-head">
+          <h3>排布说明</h3>
+          <span class="head-hint">自动分析</span>
+        </div>
+        <ul class="notes" id="layoutNotes"></ul>
+      </section>
+
+      <div class="result-actions" id="resultActions">
+        <button class="btn primary wide" id="btnPrint" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          打印 A4 装箱图
+        </button>
+        <button class="btn ghost wide" id="btnExport" type="button">导出方案 JSON</button>
+      </div>
+
+      <p class="result-disclaimer">结果为同规格叠放几何排布示意，不含不同规格混叠、绑扎、加固、偏载与危险品要求。实际装柜请以箱门铭牌和现场操作规范为准。</p>
+    </div>
+  </aside>
+</main>
+
+<nav class="tabbar" aria-label="移动端导航">
+  <button class="tab active" data-tab="input" type="button">
+    <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+    <span>录入</span>
+  </button>
+  <button class="tab" data-tab="view" type="button">
+    <svg viewBox="0 0 24 24"><path d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5zM4 8.5 12 13l8-4.5M12 13v7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+    <span>3D</span>
+  </button>
+  <button class="tab" data-tab="result" type="button">
+    <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8 8h8M8 12h5M8 16h7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>结果</span>
+  </button>
+</nav>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="print-root" id="printRoot"></div>
+
+<script src="js/data.js?v=20261126a"></script>
+<script src="js/solver.js?v=20261126a"></script>
+<script src="js/render3d.js?v=20261126a"></script>
+<script src="js/plan.js?v=20261126a"></script>
+<script src="js/app.js?v=20261126a"></script>
+</body>
+</html>

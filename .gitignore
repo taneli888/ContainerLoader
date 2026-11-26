@@ -1,0 +1,6 @@
+tests/*.png
+tests/*.pdf
+tests/*-profile/
+.DS_Store
+Thumbs.db
+tools/tests/
