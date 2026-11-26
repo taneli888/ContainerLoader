@@ -652,7 +652,7 @@
             z: 0, l: windTpl[wi][2], w: windTpl[wi][3], h: wt.h, baseH: wt.baseH,
             weight: wt.weight, rotated: windTpl[wi][2] === wt.w,
             count: wc, stackHeight: wc * wt.h, strip: 'W', order: wi,
-            baseL: windTpl[wi][2], baseW: windTpl[wi][3]
+            baseL: windTpl[wi][2], baseW: windTpl[wi][3], noAlign: true
           });
           remainW -= wc;
         }
@@ -796,12 +796,26 @@
       best.placements.forEach(function (p) { p.x = maxX - (p.x + p.l); });
     }
 
-    // 从里到外装载：整票货对齐柜头（x 最大端），余量留在柜门处。
-    // 叠放前已把矮垛/单层排在靠门方向，所以柜门侧先是最矮的货。
-    maxX = 0;
-    best.placements.forEach(function (p) { maxX = Math.max(maxX, p.x + p.l); });
-    var shiftX = Math.max(0, L - maxX);
-    best.placements.forEach(function (p) { p.x += shiftX; });
+    // 从里到外装载：每个纵向通道都尽量向柜底（x 最大端）靠，
+    // 不能只平移整票货——否则短通道会在柜底留下一个局部大空位。
+    var alignList = best.placements.slice().sort(function (a, b) {
+      return (b.x + b.l) - (a.x + a.l);
+    });
+    function yOverlap(a, b) {
+      return a.y < b.y + b.w - EPS && b.y < a.y + a.w - EPS;
+    }
+    alignList.forEach(function (p) {
+      if (p.noAlign) return;
+      var limit = L - p.l;
+      best.placements.forEach(function (q) {
+        if (q === p) return;
+        if (q.x + EPS < p.x) return;
+        if (!yOverlap(p, q)) return;
+        limit = Math.min(limit, q.x - p.l);
+      });
+      if (limit > p.x) p.x = limit;
+    });
+
     var doorClearance = Infinity;
     best.placements.forEach(function (p) { doorClearance = Math.min(doorClearance, p.x); });
     if (!isFinite(doorClearance)) doorClearance = 0;

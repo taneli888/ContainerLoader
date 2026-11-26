@@ -841,7 +841,7 @@
     var rotated = res.placements.filter(function (p) { return p.rotated; }).length;
     if (rotated) notes.push('有 <strong>' + rotated + ' 个垛位</strong> 旋转 90° 摆放，以利用柜宽或柜长方向的空间。');
     notes.push('最高垛 <strong>' + res.maxHeight + ' mm</strong>，柜内净高 ' + c.h + ' mm；顶部余高 ' + Math.max(0, c.h - res.maxHeight) + ' mm。');
-    if (res.doorClearance > 0) notes.push('装载从柜底开始：货物贴紧柜底（装载起点），柜门侧留出 <strong>' + res.doorClearance + ' mm</strong>。');
+    if (res.doorClearance > 0) notes.push('装载从柜底开始：每个纵向通道都向柜底对齐，柜门侧留出 <strong>' + res.doorClearance + ' mm</strong>，不在柜底留局部空位。');
     if (res.stackingUsed) notes.push('在整票货内部，<strong>单层/矮垛优先排在柜门侧</strong>，高垛放柜底侧，便于从柜门先卸。');
     notes.push('已用柜底 <strong>' + m2(res.floorUsed) + '</strong>，剩余 <strong>' + m2(res.floorArea - res.floorUsed) + '</strong>；地面利用率 ' + pct(res.floorUtil) + '。');
     if (res.stripCount === 2) {

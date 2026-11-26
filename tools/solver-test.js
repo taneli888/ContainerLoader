@@ -139,5 +139,9 @@ check('风车贴柜底、无柜门余量', wind.ok && wind.doorClearance === 0, 
 const wind10 = scenario('20GP 10 托 1200×1000 风车单层', c20, [Object.assign({}, windP, { qty: 10 })]);
 check('10 托风车单层优先', wind10.ok && wind10.totalCount === 10 && wind10.stackingUsed === false && wind10.maxHeight === 1100, wind10.ok ? (wind10.stackCount + '垛/' + wind10.maxHeight) : '');
 
+const three = scenario('20GP 3 托 1200×1000 柜底对齐', c20, [{ id: 'e2', name: 'EUR2', code: 'EUR2', l: 1200, w: 1000, h: 1100, baseH: 144, qty: 3, weight: 0, fill: false, color: 0 }]);
+validatePlan('THREE', three, c20);
+check('3 托短通道也贴柜底', three.ok && three.placements.every((p) => Math.abs(p.x + p.baseL - 5898) < 1 || three.placements.some((q) => q !== p && Math.abs(q.x - (p.x + p.baseL)) < 1 && q.y < p.y + p.w && p.y < q.y + q.w)), three.ok ? JSON.stringify(three.placements.map((p) => [p.x, p.y, p.l, p.w])) : '');
+
 console.log('\n结果：' + passed + ' 通过，' + failed + ' 失败');
 process.exit(failed ? 1 : 0);
