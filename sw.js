@@ -1,5 +1,5 @@
 /* Container Loader PWA service worker: network-first, offline fallback. */
-const CACHE = 'container-loader-v1';
+const CACHE = 'container-loader-v2';
 const SHELL = [
   './',
   './index.html',

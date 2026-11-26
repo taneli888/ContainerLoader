@@ -58,11 +58,41 @@ python -m http.server 8777
 
 ---
 
+## 上线与安装到手机
+
+**在线地址（GitHub Pages，已开启）：**
+
+### <https://taneli888.github.io/ContainerLoader/>
+
+### iPhone / iPad（Safari）
+
+1. 用 **Safari** 打开上面的网址（不要用微信内置浏览器）；
+2. 点底部分享按钮；
+3. 选 **“添加到主屏幕”**；
+4. 桌面会出现 Container Loader 图标，之后从主屏幕打开就是全屏 App。
+
+### Android（Chrome / Edge）
+
+1. 用 Chrome 或 Edge 打开网址；
+2. 点右上角菜单；
+3. 选 **“安装应用”** 或 **“添加到主屏幕”**；
+4. 桌面出现图标后，像普通 App 一样打开。
+
+### 离线使用
+
+页面内置了 `sw.js`：第一次在线打开后，会把 HTML / CSS / JS / 图标缓存到手机；之后断网也能打开已经缓存过的版本。更新页面后如果手机仍显示旧版，关闭 App 重新打开，或刷新一次即可。
+
+> `file://` 直接打开可以正常计算，但 **不能安装成 PWA**；要装到手机主屏幕，请用上面的 HTTPS 地址。
+
+---
+
 ## 功能
 
 - **内置 8 种常见箱型**：20GP / 40GP / 40HQ / 45HQ / 20RF / 40RF / 20OT / 40OT，并可改内尺寸与载重；
 - **内置 9 种常用托盘**：EUR、EUR2、亚洲 1100、1120 方托、GMA、美式 48×48、1200 方托、1140 方托、半托；
-- **自定义托盘**：新建后直接命名、改长宽高/单托重/数量；卡片右上角垃圾桶删除；
+- **自定义托盘**：新建后自动加入“常用规格”下拉列表；名称、显示名（3D/打印简称）、长宽高、单托重、数量都可编辑；卡片右上角垃圾桶删除；
+- **常用规格下拉**：内置规格 + 我的自定义规格；改了自定义规格的名称/尺寸后，下拉列表会同步更新；
+- **界面字体整体放大**：所有主要标签、输入框、结果与 3D 标注统一放大，手机上也更易读；
 - **默认同规格叠放**：每个规格按柜内净高自动算层数，1100mm 托盘在 20GP 内是 2 层；
 - **补柜按钮可反复切换**：按下时计算该规格最多能补多少托；再按一次取消补柜、恢复数量输入，按实际数据填写；
 - **3D 装柜演示**：等轴测 / 俯视 / 侧视 / 柜门视角，左键旋转、右键或 Shift 拖动平移、滚轮/双指缩放、双击复位；
@@ -76,6 +106,8 @@ python -m http.server 8777
 - **方案导出**：结果可导出 JSON，方便留档或二次处理。
 
 ![选中托盘](docs/selected.png)
+
+![自定义显示名](docs/custom.png)
 
 ---
 
@@ -243,6 +275,7 @@ container-loader/
 ├─ index.html                 页面入口
 ├─ 启动 Container Loader.vbs  无控制台启动
 ├─ manifest.webmanifest       PWA manifest
+├─ sw.js                      Service Worker（离线缓存）
 ├─ css/style.css              界面 / 响应式 / 打印样式
 ├─ js/data.js                 箱型、托盘预设、示例
 ├─ js/solver.js               同规格叠放 + 柜底 2D 装柜求解器
@@ -258,9 +291,17 @@ container-loader/
 
 ## 部署到 GitHub Pages
 
-这是个纯静态目录，不需要构建：
+这个仓库已经启用 GitHub Pages：**<https://taneli888.github.io/ContainerLoader/>**。
 
-1. 把 `container-loader/` 里的全部文件放到仓库根目录（或任意子目录）；
+以后更新代码只需要：
+
+1. 修改后 `git add -A && git commit -m "..." && git push`；
+2. 等 1–2 分钟 GitHub Pages 自动重新部署；
+3. 手机刷新或重新打开 PWA 即可拿到新版本。
+
+如果换一个新仓库，流程是：
+
+1. 把 `container-loader/` 里的全部文件放到仓库根目录；
 2. 仓库 Settings → Pages → Deploy from a branch；
 3. 选择分支和 `/ (root)`；
 4. 打开 `https://<用户名>.github.io/<仓库名>/`。
