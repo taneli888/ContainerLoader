@@ -1,4 +1,4 @@
-﻿/*!
+/*!
  * Container Loader — 单层托盘装柜求解器
  *
  * 坐标系（与装柜现场一致）：
@@ -176,6 +176,11 @@
       if (!rawL || !rawW || !h) continue;
       var layers = allowStack ? Math.max(1, Math.floor(H / h)) : 1;
       if (!isFinite(layers) || layers < 1) layers = 1;
+      var stackQty = Math.ceil(qty / layers);
+      var override = options && options.stackUnitCounts && options.stackUnitCounts[String(p.id || ('p' + i))];
+      if (override != null && allowStack) {
+        stackQty = Math.max(Math.ceil(qty / layers), Math.min(qty, Math.round(Number(override) || 0)));
+      }
       normalized.push({
         id: String(p.id || ('p' + i)),
         name: String(p.name || ('托盘 ' + rawL + '×' + rawW)),
@@ -187,7 +192,7 @@
         qty: qty,
         actualQty: qty,
         layers: layers,
-        stackQty: Math.ceil(qty / layers),
+        stackQty: stackQty,
         stackHeight: layers * h,
         weight: Math.max(0, Number(p.weight) || 0),
         fill: !!p.fill,
@@ -201,7 +206,7 @@
 
     return {
       L: L, W: W, H: H, payload: payload, gap: gap, doorGap: doorGap, allowRotate: allowRotate,
-      allowStack: allowStack, pallets: normalized
+      allowStack: allowStack, noMerge: !!(options && options.noMerge), pallets: normalized
     };
   }
 
@@ -509,6 +514,110 @@
   }
 
   /* ------------------------------------------------------------------ */
+  /* 多规格“柜门优先”候选：按装柜顺序分带                                */
+  /* 先装规格在柜底，后装规格在其前方，最后装柜的规格最靠近柜门。          */
+  /* ------------------------------------------------------------------ */
+
+  function typeOrientations(t, allowRotate) {
+    var out = [{ l: t.l, w: t.w, rotated: false }];
+    if (allowRotate && t.l !== t.w) out.push({ l: t.w, w: t.l, rotated: true });
+    return out;
+  }
+
+  function distributeCounts(qty, units, layers) {
+    var out = [];
+    var remain = qty;
+    for (var i = 0; i < units; i++) {
+      var after = units - i - 1;
+      var c = Math.max(1, Math.min(layers, remain - after));
+      out.push(c);
+      remain -= c;
+    }
+    return remain === 0 ? out : null;
+  }
+
+  function buildDoorPriorityPlan(P, requiredTypes, fillType, L, W) {
+    if (!requiredTypes.length) return null;
+    var placements = [];
+    var bandX = 0;
+    var typeOrder = 0;
+
+    for (var ti = 0; ti < requiredTypes.length; ti++) {
+      var t = requiredTypes[ti];
+      var units = t.stackQty;
+      var counts = distributeCounts(t.qty, units, t.layers);
+      if (!counts) return null;
+      var bestO = null;
+      typeOrientations(t, P.allowRotate).forEach(function (o) {
+        var cols = Math.floor(W / o.w);
+        if (cols < 1) return;
+        var rows = Math.ceil(units / cols);
+        var depth = rows * o.l;
+        if (bandX + depth > L + EPS) return;
+        if (!bestO || depth < bestO.depth || (depth === bestO.depth && cols > bestO.cols)) {
+          bestO = { l: o.l, w: o.w, rotated: o.rotated, cols: cols, rows: rows, depth: depth };
+        }
+      });
+      if (!bestO) return null;
+      for (var ui = 0; ui < units; ui++) {
+        var row = Math.floor(ui / bestO.cols);
+        var col = ui % bestO.cols;
+        placements.push({
+          typeId: t.id, name: t.name, code: t.code, color: t.color, fill: false,
+          x: bandX + row * bestO.l, y: col * bestO.w, z: 0,
+          l: bestO.l, w: bestO.w, h: t.h, baseH: t.baseH, weight: t.weight,
+          rotated: bestO.rotated, count: counts[ui], stackHeight: counts[ui] * t.h,
+          strip: 'B', order: placements.length, baseL: bestO.l, baseW: bestO.w,
+          typeOrder: typeOrder
+        });
+      }
+      bandX += bestO.depth;
+      typeOrder++;
+    }
+
+    var fillCount = 0;
+    if (fillType) {
+      var remaining = L - bandX;
+      var bestF = null;
+      typeOrientations(fillType, P.allowRotate).forEach(function (o) {
+        var cols = Math.floor(W / o.w);
+        var rows = Math.floor(remaining / o.l);
+        var units = cols * rows;
+        if (units < 1) return;
+        var total = units * fillType.layers;
+        if (!bestF || total > bestF.total || (total === bestF.total && rows * o.l < bestF.depth)) {
+          bestF = { l: o.l, w: o.w, rotated: o.rotated, cols: cols, rows: rows, units: units, total: total, depth: rows * o.l };
+        }
+      });
+      if (bestF) {
+        for (var fi = 0; fi < bestF.units; fi++) {
+          var frow = Math.floor(fi / bestF.cols);
+          var fcol = fi % bestF.cols;
+          placements.push({
+            typeId: fillType.id, name: fillType.name, code: fillType.code, color: fillType.color, fill: true,
+            x: bandX + frow * bestF.l, y: fcol * bestF.w, z: 0,
+            l: bestF.l, w: bestF.w, h: fillType.h, baseH: fillType.baseH, weight: fillType.weight,
+            rotated: bestF.rotated, count: fillType.layers, stackHeight: fillType.layers * fillType.h,
+            strip: 'B', order: placements.length, baseL: bestF.l, baseW: bestF.w, typeOrder: typeOrder
+          });
+        }
+        fillCount = bestF.total;
+      }
+    }
+
+    return {
+      placements: placements,
+      fillCount: fillCount,
+      fillStacks: fillType ? fillCount / fillType.layers : 0,
+      stackCount: placements.length,
+      doorClear: Math.max(0, L - Math.max.apply(null, placements.map(function (p) { return p.x + p.l; }))),
+      score: fillCount * 1e12 + 4e8,
+      stripCount: 1,
+      cut: W
+    };
+  }
+
+  /* ------------------------------------------------------------------ */
   /* 主求解                                                              */
   /* ------------------------------------------------------------------ */
 
@@ -639,17 +748,19 @@
         }
       }
 
-      // 垛位上的实际托盘数：必装按“满垛优先”分配，补柜尽量满垛。
+      // 垛位上的实际托盘数：每个垛位至少 1 托，多余托盘优先叠到前面的垛位。
       var countOk = true;
       requiredTypes.forEach(function (t) {
         var arr = placements.filter(function (p) { return p.typeId === t.id; });
         var remain = t.qty;
-        arr.forEach(function (p) {
-          var c = Math.min(t.layers, remain);
-          p.count = c;
-          p.layers = c;
-          p.stackHeight = c * t.h;
-          remain -= c;
+        arr.forEach(function (p, ai) {
+          var unitsAfter = arr.length - ai - 1;
+          var c = Math.max(1, Math.min(t.layers, remain - unitsAfter));
+          if (!isFinite(c) || c < 1 || c > t.layers) countOk = false;
+          p.count = Math.max(0, c);
+          p.layers = Math.max(0, c);
+          p.stackHeight = Math.max(0, c) * t.h;
+          remain -= Math.max(0, c);
         });
         if (remain !== 0) countOk = false;
       });
@@ -720,9 +831,8 @@
     //    普通横竖排法在 5898 长度下会差一点，风车能放下 10 个。
     if (requiredTypes.length === 1 && !fillType && L >= 5898 && W >= 2352 && P.allowRotate) {
       var wt = requiredTypes[0];
-      var perStack = P.allowStack ? 2 : 1;
-      var windCap = perStack * 10;
-      if (wt.l === 1200 && wt.w === 1000 && wt.qty <= windCap) {
+      var targetUnits = wt.stackQty;
+      if (wt.l === 1200 && wt.w === 1000 && targetUnits <= 10 && targetUnits >= 1 && wt.qty <= 20) {
         var windTpl = [
           [0, 0, 1200, 1000], [1200, 0, 1000, 1200], [1000, 1208, 1200, 1000],
           [0, 1002, 1000, 1200], [2201, 0, 1000, 1200], [3201, 2, 1000, 1200],
@@ -731,8 +841,9 @@
         ];
         var windPlaces = [];
         var remainW = wt.qty;
-        for (var wi = 0; wi < windTpl.length && remainW > 0; wi++) {
-          var wc = Math.min(perStack, remainW);
+        for (var wi = 0; wi < targetUnits; wi++) {
+          var leftUnits = targetUnits - wi - 1;
+          var wc = Math.max(1, Math.min(wt.layers, remainW - leftUnits));
           windPlaces.push({
             typeId: wt.id, name: wt.name, code: wt.code, color: wt.color, fill: false,
             x: windTpl[wi][0] + (L - 5898), y: windTpl[wi][1] + (W - 2352) / 2,
@@ -755,6 +866,19 @@
             cut: W
           };
           if (!best || windCand.score > best.score) best = windCand;
+        }
+      }
+    }
+
+    // 4) 多规格：按装柜顺序分带，后装规格靠近柜门。
+    if (requiredTypes.length >= 2) {
+      var doorBand = buildDoorPriorityPlan(P, requiredTypes, fillType, L, W);
+      if (doorBand) {
+        if (!best || doorBand.fillCount > best.fillCount) {
+          best = doorBand;
+        } else if (doorBand.fillCount === best.fillCount) {
+          // 数量相同，柜门优先方案胜出；后装规格会落在更靠柜门的位置。
+          best = doorBand;
         }
       }
     }
@@ -801,7 +925,7 @@
     var addedFillStacks = 0;
     var mergeGuard = 0;
     var changed = true;
-    while (P.allowStack && changed && mergeGuard++ < 120) {
+    while (P.allowStack && !P.noMerge && changed && mergeGuard++ < 120) {
       changed = false;
       var byArea = best.placements.slice().sort(function (a, b) { return b.l * b.w - a.l * a.w; });
       outer:
@@ -1047,10 +1171,52 @@
   }
 
   /*
+   * 最小叠放搜索（单规格必装）：
+   * 不叠放优先时，优先让地面垛位尽量多——即尽量少叠。
+   * stackUnitCounts 控制“地面垛位数 U”，数量仍是 qty；
+   * U 越大，单层越多，叠放越少。二分查找最大的可行 U。
+   */
+  function solveLeastStacking(container, pallets, options) {
+    var required = pallets.filter(function (p) { return !p.fill && Number(p.qty) > 0; });
+    if (required.length !== 1) return null;
+    var p = required[0];
+    var H = Math.round(Number(container.h) || 0);
+    var layers = options.allowStack === false ? 1 : Math.max(1, Math.floor(H / Math.round(Number(p.h) || 1)));
+    var qty = Math.round(Number(p.qty) || 0);
+    var minUnits = Math.ceil(qty / layers);
+    if (qty <= minUnits) return null;
+
+    var lo = minUnits + 1, hi = qty - 1, best = null, tries = 0;
+    while (lo <= hi && tries++ < 14) {
+      var mid = Math.floor((lo + hi) / 2);
+      var counts = {};
+      counts[String(p.id)] = mid;
+      var opts = Object.assign({}, options, {
+        allowStack: true,
+        noMerge: true,
+        stackUnitCounts: counts
+      });
+      var r = solveCore(container, pallets, opts);
+      if (r && r.ok) {
+        best = r;
+        lo = mid + 1;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    if (best) {
+      best.stackingUsed = true;
+      best.strategy = 'min-stack';
+      best.allowStack = true;
+    }
+    return best;
+  }
+
+  /*
    * 外层策略：
    * - 关闭叠放：直接按单层算。
-   * - 没有补柜（都是实际数量）：先试单层，单层放得下就不叠。
-   * - 有补柜：比较单层和叠放，补柜数量更多的优先；数量相同时优先单层。
+   * - 不叠放优先：先全部单层；放不下时，用最小叠放方案（优先多地面垛位）。
+   * - 叠放优先：先按最大叠放算。
    */
   function solve(container, pallets, options) {
     var base = Object.assign({}, options || {});
@@ -1063,15 +1229,18 @@
     }
 
     var single = solveCore(container, pallets, singleOpts);
-    // 默认：不叠放优先。单层能装下全部必装就不叠。
-    if (base.preferSingle !== false && single && single.ok) {
-      single.stackingUsed = false;
-      single.strategy = 'single-preferred';
-      single.allowStack = true;
-      return single;
+    if (base.preferSingle !== false) {
+      if (single && single.ok) {
+        single.stackingUsed = false;
+        single.strategy = 'single-preferred';
+        single.allowStack = true;
+        return single;
+      }
+      var least = solveLeastStacking(container, pallets, base);
+      if (least && least.ok) return least;
     }
 
-    // 叠放优先：先尝试叠放；叠放放不下再退回单层。
+    // 叠放优先：先尝试最大叠放；叠放放不下再退回单层。
     var stacked = solveCore(container, pallets, base);
     if (stacked && stacked.ok) {
       stacked.stackingUsed = true;

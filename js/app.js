@@ -767,7 +767,7 @@
     $('#clearanceCount').textContent = clearance.length ? (clearance.length + ' 项需复核') : '';
     $('#clearanceList').innerHTML = clearance.map(function (w) { return '<li>' + esc(w.text) + '</li>'; }).join('');
 
-    var badge = res.mixedStacks ? '混合叠放方案' : ((!res.stackingUsed && res.allowStack) ? '单层优先' : (res.optimalByArea ? '达到面积上限' : (res.fillType ? '条带搜索方案' : '叠放排布')));
+    var badge = res.mixedStacks ? '混合叠放方案' : (res.strategy === 'min-stack' ? '最少叠放' : ((!res.stackingUsed && res.allowStack) ? '单层优先' : (res.optimalByArea ? '达到面积上限' : (res.fillType ? '条带搜索方案' : '叠放排布'))));
     $('#resultBadge').textContent = badge;
     $('#resultBadge').classList.toggle('warn', !res.optimalByArea && !!res.fillType);
 
@@ -776,7 +776,7 @@
       verdict = '<strong>' + res.requiredCount + ' 托必装全部装入</strong>；补柜规格 ' + esc(fillName) + ' 还能加 <strong>' + res.fillCount + ' 托</strong>，总装载 <strong>' + res.totalCount + ' 托</strong>（' + res.stackCount + ' 个垛位）' + (res.mixedStacks ? '，含 ' + res.mixedStacks + ' 个混合叠放垛位' : '') + '。';
       if (res.optimalByArea) verdict += ' 补柜数量已达到按柜底面积计算的理论上限。';
     } else {
-      verdict = '<strong>' + res.requiredCount + ' 托必装全部装入</strong>，共 ' + res.stackCount + ' 个垛位' + (res.mixedStacks ? '（含混合叠放）' : (res.stackingUsed ? '（叠放）' : '（单层）')) + '。';
+      verdict = '<strong>' + res.requiredCount + ' 托必装全部装入</strong>，共 ' + res.stackCount + ' 个垛位' + (res.mixedStacks ? '（含混合叠放）' : (res.strategy === 'min-stack' ? '（最少叠放）' : (res.stackingUsed ? '（叠放）' : '（单层）'))) + '。';
     }
     $('#verdict').innerHTML = verdict;
 
@@ -799,11 +799,15 @@
       if (!count) return;
       var c = colorFor(p.color);
       var stacks = (res.stackCounts && res.stackCounts[p.id]) || 0;
-      var layers = layersFor(p);
+      var typePlacements = res.placements.filter(function (x) { return x.typeId === p.id; });
+      var layerCounts = typePlacements.map(function (x) { return (x.layers && x.layers.length) || 1; });
+      var maxLayers = layerCounts.length ? Math.max.apply(null, layerCounts) : 1;
+      var minLayers = layerCounts.length ? Math.min.apply(null, layerCounts) : 1;
+      var layerLabel = minLayers === maxLayers ? (maxLayers > 1 ? ' × ' + maxLayers + ' 层' : ' · 单层') : (' · ' + minLayers + '–' + maxLayers + ' 层');
       rows.push('' +
         '<div class="type-row' + (p.fill ? ' fill' : '') + '">' +
           '<span class="type-swatch" style="background:' + c.solid + '"></span>' +
-          '<div class="type-info"><b>' + esc(p.name) + '</b><span>' + p.l + '×' + p.w + '×' + p.h + ' mm · ' + (p.fill ? '补柜规格' : '必装') + ' · ' + stacks + ' 垛' + (layers > 1 ? ' × ' + layers + ' 层' : ' · 单层') + '</span></div>' +
+          '<div class="type-info"><b>' + esc(p.name) + '</b><span>' + p.l + '×' + p.w + '×' + p.h + ' mm · ' + (p.fill ? '补柜规格' : '必装') + ' · ' + stacks + ' 垛' + layerLabel + '</span></div>' +
           '<div class="type-count"><b>' + count + '</b><span>托</span></div>' +
         '</div>');
     });
@@ -819,6 +823,9 @@
     if (!res.stackingUsed && res.allowStack) {
       notes.push('单层已经能装下全部必装，按<strong>优先不叠放</strong>采用单层方案；如需用叠放换更多补柜，可取消“优先不叠放”。');
     }
+    if (res.strategy === 'min-stack') {
+      notes.push('按<strong>不叠放优先</strong>：先把能平放的托盘全部平放，只叠最少的组数；不会为了减少垛位而把整票货都叠起来。');
+    }
     if (res.stackingUsed && res.allowStack) {
       notes.push('叠放规则：<strong>上面托盘的长边和短边都不超过下方托盘</strong>才允许叠放；大托底、小托上可以，反过来不行。');
     }
@@ -831,6 +838,9 @@
     }
     notes.push('共 <strong>' + res.stackCount + ' 个垛位</strong>，必装参与 ' + res.requiredStacks + ' 垛 + 补柜纯垛 ' + res.fillStacks + ' 垛' + (res.mixedStacks ? '；其中混合叠放 ' + res.mixedStacks + ' 垛' : '') + '。');
     if (res.mixedStacks) notes.push('本方案使用了混合叠放，因此不按单一规格的面积上限判断最优。');
+    if (state.pallets.length > 1 && res.placements && res.placements.length) {
+      notes.push('多规格按托盘清单顺序装柜：排在前面的先装、靠柜底；最后添加的规格尽量放在柜门侧。');
+    }
     var cm = scene && scene._cargoMetrics ? scene._cargoMetrics() : null;
     if (cm) {
       var env = '实际装载包络 <strong>' + Math.round(cm.length) + ' × ' + Math.round(cm.width) + ' mm</strong>';

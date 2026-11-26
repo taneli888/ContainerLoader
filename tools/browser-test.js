@@ -296,6 +296,42 @@ async function shot(cdp, name) {
     await evaluate(cdp, `document.querySelector('#btnExample').click()`);
     await sleep(700);
 
+    // 11 托 1200×1000：不叠放优先应为 1 组双层 + 9 个平放
+    await evaluate(cdp, `(() => {
+      __CL_DEBUG.state.pallets = [
+        { id:'e11', name:'EUR2 1200×1000', code:'EUR2', l:1200, w:1000, h:1100, baseH:144, qty:11, weight:0, fill:false, color:0 }
+      ];
+      __CL_DEBUG.state.options.allowStack = true;
+      __CL_DEBUG.state.options.preferSingle = true;
+      __CL_DEBUG.calculate(false);
+    })()`);
+    await sleep(900);
+    const least11 = await evaluate(cdp, `({ total: document.querySelector('#resultTotal').textContent, stacks: __CL_DEBUG.state.layout.stackCount, doubles: __CL_DEBUG.state.layout.placements.filter(p=>p.count===2).length, strategy: __CL_DEBUG.state.layout.strategy, badge: document.querySelector('#resultBadge').textContent })`);
+    await shot(cdp, 'desktop-11-cdp.png');
+    await evaluate(cdp, `document.querySelector('#btnExample').click()`);
+    await sleep(700);
+
+    // 多规格：最后添加的 SMALL 应靠近柜门
+    await evaluate(cdp, `(() => {
+      __CL_DEBUG.state.pallets = [
+        { id:'eur8', name:'欧标 EUR', code:'EUR', l:1200, w:800, h:1100, baseH:144, qty:8, weight:0, fill:false, color:0 },
+        { id:'sm2', name:'SMALL 1000×700', code:'SM', l:1000, w:700, h:1000, baseH:144, qty:2, weight:0, fill:false, color:1 }
+      ];
+      __CL_DEBUG.state.options.allowStack = true;
+      __CL_DEBUG.state.options.preferSingle = true;
+      __CL_DEBUG.calculate(false);
+    })()`);
+    await sleep(900);
+    const multi = await evaluate(cdp, `(() => {
+      const ps = __CL_DEBUG.state.layout.placements;
+      const eurMax = Math.max(...ps.filter(p=>p.typeId==='eur8').map(p=>p.x+p.l));
+      const smMin = Math.min(...ps.filter(p=>p.typeId==='sm2').map(p=>p.x));
+      return { total: document.querySelector('#resultTotal').textContent, stacks: __CL_DEBUG.state.layout.stackCount, eurMax, smMin, door: __CL_DEBUG.state.layout.doorClearance };
+    })()`);
+    await shot(cdp, 'desktop-multi-cdp.png');
+    await evaluate(cdp, `document.querySelector('#btnExample').click()`);
+    await sleep(700);
+
     // 平板 / 窄桌面
     await metrics(cdp, 1024, 900, false);
     await sleep(500);
@@ -371,6 +407,8 @@ async function shot(cdp, name) {
     console.log('PRIORITY', JSON.stringify({ stack: priorityStack, single: prioritySingle }, null, 2));
     console.log('MIXED', JSON.stringify(mixedResult, null, 2));
     console.log('WINDMILL', JSON.stringify(windmill, null, 2));
+    console.log('LEAST11', JSON.stringify(least11, null, 2));
+    console.log('MULTI', JSON.stringify(multi, null, 2));
 
     console.log('TABLET', JSON.stringify(tablet, null, 2));
     console.log('MOBILE', JSON.stringify(mobile, null, 2));

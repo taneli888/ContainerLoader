@@ -116,5 +116,12 @@ audit('20GP · 3 托 1200×1000', c20, [eur2], { allowRotate: true, gap: 0, allo
 const example = DATA.clone(DATA.example);
 audit('20GP · 8 EUR + 1120 补柜（当前默认）', example.container, example.pallets, example.options);
 
+const least11 = { id: 'e2', name: 'EUR2', code: 'EUR2', l: 1200, w: 1000, h: 1100, baseH: 144, qty: 11, weight: 0, fill: false, color: 0 };
+audit('20GP · 11 托 1200×1000 不叠放优先', c20, [least11], { allowRotate: true, gap: 0, allowStack: true, preferSingle: true, doorGap: 0 });
+
+const eur8 = { id: 'e', name: 'EUR', code: 'EUR', l: 1200, w: 800, h: 1100, baseH: 144, qty: 8, weight: 0, fill: false, color: 0 };
+const small2 = { id: 's', name: 'SMALL', code: 'SM', l: 1000, w: 700, h: 1000, baseH: 144, qty: 2, weight: 0, fill: false, color: 1 };
+audit('20GP · 8 EUR + 2 SMALL（后装规格靠柜门）', c20, [eur8, small2], { allowRotate: true, gap: 0, allowStack: true, preferSingle: true, doorGap: 0 });
+
 const wind = { id: 'w', name: '1200×1000', code: 'WIND', l: 1200, w: 1000, h: 1100, baseH: 144, qty: 20, weight: 0, fill: false, color: 0 };
 audit('20GP · 20 托 1200×1000 风车', c20, [wind], { allowRotate: true, gap: 0, allowStack: true, preferSingle: true, doorGap: 0 });

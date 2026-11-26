@@ -216,10 +216,13 @@
       if (!count) return '';
       var stacks = (result.stackCounts && result.stackCounts[t.id]) || 0;
       var typePlacements = (result.placements || []).filter(function (p) { return p.typeId === t.id; });
-      var layers = typePlacements.length ? ((typePlacements[0].layers && typePlacements[0].layers.length) || 1) : 1;
+      var layerCounts = typePlacements.map(function (p) { return (p.layers && p.layers.length) || 1; });
+      var layers = layerCounts.length ? Math.max.apply(null, layerCounts) : 1;
+      var minLayers = layerCounts.length ? Math.min.apply(null, layerCounts) : 1;
+      var layerText = minLayers === layers ? (layers + '层') : (minLayers + '–' + layers + '层');
       return '<tr>' +
         '<td><span style="display:inline-block;width:2.4mm;height:2.4mm;border-radius:.5mm;background:' + esc(t.solid || '#c2733c') + ';margin-right:1.2mm;vertical-align:-.2mm"></span>' + esc(t.name) + '</td>' +
-        '<td>' + num(t.l) + ' × ' + num(t.w) + ' × ' + num(t.h) + ' · ' + layers + '层</td>' +
+        '<td>' + num(t.l) + ' × ' + num(t.w) + ' × ' + num(t.h) + ' · ' + layerText + '</td>' +
         '<td class="num">' + (hasFill ? (t.fill ? '—' : num(t.qty)) : num(count)) + '</td>' +
         (hasFill ? '<td class="num">' + (t.fill ? num(count) : '—') + '</td>' : '') +
         '<td class="num"><b>' + num(count) + '</b></td>' +
@@ -235,7 +238,7 @@
     var verdict = '必装 ' + num(result.requiredCount) + ' 托全部装入' +
       (result.fillType ? '，另可补柜 ' + num(result.fillCount) + ' 托 ' + esc(result.fillType.name) : '') +
       '。总计 ' + num(result.totalCount) + ' 托、' + num(result.stackCount) + ' 个垛位' +
-      (result.stackingUsed ? '（叠放）' : '（单层）') + '。' +
+      (result.strategy === 'min-stack' ? '（最少叠放）' : (result.stackingUsed ? '（叠放）' : '（单层）')) + '。' +
       (result.optimalByArea ? ' 补柜数量达到面积理论上限。' : '');
     var clearance = result.clearanceWarnings || [];
     if (clearance.length) {
@@ -262,7 +265,7 @@
       ? (num(envMaxX - envMinX) + ' × ' + num(envMaxY - envMinY) + ' mm')
       : '—';
 
-    var planMode = result.stackingUsed ? (result.mixedStacks ? '混合叠放装柜方案' : '叠放装柜方案') : '单层装柜方案';
+    var planMode = result.strategy === 'min-stack' ? '最少叠放装柜方案' : (result.stackingUsed ? (result.mixedStacks ? '混合叠放装柜方案' : '叠放装柜方案') : '单层装柜方案');
     return '' +
       '<div class="print-sheet">' +
         '<header class="print-head">' +

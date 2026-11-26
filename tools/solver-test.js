@@ -90,10 +90,12 @@ validatePlan('EUR11', eur11, c20);
 check('11 EUR 可装', eur11.ok && eur11.totalCount === 11);
 check('11 EUR 单层可放时优先不叠', eur11.ok && eur11.stackCount === 11 && eur11.maxHeight === 1100, eur11.ok ? (eur11.stackCount + '垛/' + eur11.maxHeight) : '');
 
-const eur12s = scenario('20GP 12 EUR（叠放）', c20, [Object.assign({}, eur, { qty: 12 })]);
+const eur12s = scenario('20GP 12 EUR（不叠放优先）', c20, [Object.assign({}, eur, { qty: 12 })]);
 validatePlan('EUR12S', eur12s, c20);
-check('12 EUR 叠放可装', eur12s.ok && eur12s.totalCount === 12);
-check('12 EUR 为 6 个满垛', eur12s.ok && eur12s.stackCount === 6 && eur12s.placements.every((p) => p.count === 2));
+check('12 EUR 可装', eur12s.ok && eur12s.totalCount === 12);
+check('12 EUR 不叠放优先：1 个双层 + 10 个单层', eur12s.ok && eur12s.stackCount === 11 && eur12s.placements.filter((p) => p.count === 2).length === 1);
+const eur12Stack = scenario('20GP 12 EUR（叠放优先）', c20, [Object.assign({}, eur, { qty: 12 })], { allowRotate: true, gap: 0, allowStack: true, preferSingle: false, doorGap: 0 });
+check('12 EUR 叠放优先：6 个满垛', eur12Stack.ok && eur12Stack.stackCount === 6 && eur12Stack.placements.every((p) => p.count === 2));
 
 const eur12 = scenario('20GP 12 EUR（关闭叠放）', c20, [Object.assign({}, eur, { qty: 12 })], { allowRotate: true, gap: 0, allowStack: false });
 check('12 EUR 单层不可装', !eur12.ok);
@@ -143,6 +145,22 @@ check('10 托风车单层优先', wind10.ok && wind10.totalCount === 10 && wind1
 const three = scenario('20GP 3 托 1200×1000 柜底对齐', c20, [{ id: 'e2', name: 'EUR2', code: 'EUR2', l: 1200, w: 1000, h: 1100, baseH: 144, qty: 3, weight: 0, fill: false, color: 0 }]);
 validatePlan('THREE', three, c20);
 check('3 托短通道也贴柜底', three.ok && three.placements.every((p) => p.x === 0 || three.placements.some((q) => q !== p && Math.abs(q.x + q.baseL - p.x) < 1 && q.y < p.y + p.w && p.y < q.y + q.w)), three.ok ? JSON.stringify(three.placements.map((p) => [p.x, p.y, p.l, p.w])) : '');
+
+const eur2x11 = { id: 'e2', name: 'EUR2', code: 'EUR2', l: 1200, w: 1000, h: 1100, baseH: 144, qty: 11, weight: 0, fill: false, color: 0 };
+const least11 = scenario('20GP 11 托 1200×1000 不叠放优先', c20, [eur2x11]);
+validatePlan('LEAST11', least11, c20);
+const counts11 = least11.ok ? least11.placements.map((p) => p.count).sort((a, b) => a - b) : [];
+check('11 托不叠放优先：1 组叠放 + 9 个平放', least11.ok && counts11.filter((n) => n === 2).length === 1 && counts11.filter((n) => n === 1).length === 9, least11.ok ? counts11.join(',') : '');
+const stack11 = scenario('20GP 11 托 1200×1000 叠放优先', c20, [eur2x11], { allowRotate: true, gap: 0, allowStack: true, preferSingle: false, doorGap: 0 });
+check('11 托叠放优先：5 个双层 + 1 个单层', stack11.ok && stack11.stackCount === 6 && stack11.placements.filter((p) => p.count === 2).length === 5, stack11.ok ? stack11.placements.map((p) => p.count).join(',') : '');
+
+const small2 = { id: 's2', name: 'SMALL 1000×700', code: 'SM', l: 1000, w: 700, h: 1000, baseH: 144, qty: 2, weight: 0, fill: false, color: 1 };
+const multiDoor = scenario('20GP 8 EUR + 2 SMALL（后装规格靠柜门）', c20, [eur, small2]);
+validatePlan('MULTI', multiDoor, c20);
+const eurMaxX = multiDoor.ok ? Math.max(...multiDoor.placements.filter((p) => p.typeId === eur.id).map((p) => p.x + p.baseL)) : 0;
+const smMinX = multiDoor.ok ? Math.min(...multiDoor.placements.filter((p) => p.typeId === small2.id).map((p) => p.x)) : 0;
+check('多规格后装规格在柜门侧', multiDoor.ok && smMinX >= eurMaxX - 1, multiDoor.ok ? ('SM ' + smMinX + ' / EUR end ' + eurMaxX) : '');
+check('多规格总托数 10', multiDoor.ok && multiDoor.totalCount === 10, multiDoor.ok ? String(multiDoor.totalCount) : '');
 
 console.log('\n结果：' + passed + ' 通过，' + failed + ' 失败');
 process.exit(failed ? 1 : 0);
