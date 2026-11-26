@@ -1,5 +1,5 @@
-/* Container Loader PWA service worker: network-first, offline fallback. */
-const CACHE = 'container-loader-v2';
+﻿/* Container Loader PWA service worker: network-first, offline fallback. */
+const CACHE = 'container-loader-v9';
 const SHELL = [
   './',
   './index.html',
@@ -40,3 +40,10 @@ self.addEventListener('fetch', (event) => {
     }).catch(() => caches.match(req).then((hit) => hit || (req.mode === 'navigate' ? caches.match('./index.html') : null)))
   );
 });
+
+
+
+
+
+
+

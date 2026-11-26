@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
@@ -13,7 +13,7 @@
   <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="css/style.css?v=20261126d">
+  <link rel="stylesheet" href="css/style.css?v=20261126k">
 </head>
 <body data-mobile-tab="input">
 
@@ -118,6 +118,7 @@
           <select id="presetSelect" aria-label="选择常用托盘规格"></select>
           <button class="btn ghost compact" id="btnAddPreset" type="button">添加规格</button>
         </div>
+        <button class="text-btn manage-presets" id="btnManagePresets" type="button">管理自定义规格</button>
         <button class="add-custom" id="btnAddCustom" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
           新建自定义托盘
@@ -131,13 +132,19 @@
             <span class="section-kicker">03</span>
             <h2>装载参数</h2>
           </div>
-          <span class="head-hint" id="stackHeadHint">同规格叠放</span>
+          <span class="head-hint" id="stackHeadHint">大底小上</span>
         </div>
+
+        <div class="priority-seg" id="prioritySeg" role="group" aria-label="装载策略">
+          <button type="button" data-priority="single" class="active">不叠放优先</button>
+          <button type="button" data-priority="stack">叠放优先</button>
+        </div>
+        <p class="micro">默认不叠放优先：单层放得下全部必装就不叠；选择叠放优先后先叠。无论哪种，单层/矮垛都排在靠柜门一侧。</p>
 
         <label class="switch-row">
           <span>
-            <b>允许同规格叠放</b>
-            <small>按柜内净高自动算层数；不同规格不混叠</small>
+            <b>允许叠放</b>
+            <small>大托底、小托上；上层长宽都不能超过下层</small>
           </span>
           <input id="allowStack" type="checkbox" checked>
           <i class="switch"></i>
@@ -156,11 +163,15 @@
           <span>托盘间隙 <small>mm</small></span>
           <input id="gapInput" type="number" inputmode="numeric" min="0" max="200" step="5" value="0">
         </label>
-        <p class="micro">间隙会同时加到每个托盘的长、宽上；实际装柜建议预留 10–30mm。</p>
+        <label class="inline-field">
+          <span>柜门预留 <small>mm</small></span>
+          <input id="doorGapInput" type="number" inputmode="numeric" min="0" max="2000" step="10" value="0">
+        </label>
+        <p class="micro">间隙会加到每个托盘长宽上；柜门预留优先留在柜门，货物贴紧柜底。</p>
 
         <div class="single-layer-note" id="stackNote">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5-8 4.5zM4 12l8 4.5 8-4.5M4 15.5 12 20l8-4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
-          <span>同规格上下叠放，层数按 2393mm 柜内净高自动计算；不同规格不混叠。</span>
+          <span>大底小上叠放，层数按 2393mm 柜内净高自动计算；上层长宽不能超过下层。</span>
         </div>
       </section>
 
@@ -325,7 +336,7 @@
         <button class="btn ghost wide" id="btnExport" type="button">导出方案 JSON</button>
       </div>
 
-      <p class="result-disclaimer">结果为同规格叠放几何排布示意，不含不同规格混叠、绑扎、加固、偏载与危险品要求。实际装柜请以箱门铭牌和现场操作规范为准。</p>
+      <p class="result-disclaimer">结果为托盘几何排布示意（单层优先；叠放时大托底、小托上），不含违规叠放、绑扎、加固、偏载与危险品要求。实际装柜请以箱门铭牌和现场操作规范为准。</p>
     </div>
   </aside>
 </main>
@@ -345,14 +356,38 @@
   </button>
 </nav>
 
+<div class="modal" id="presetModal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="presetModalTitle">
+    <header class="modal-head">
+      <div>
+        <h3 id="presetModalTitle">管理自定义规格</h3>
+        <p>名称 / 显示名在托盘卡片里改；这里可以删除不再需要的规格。</p>
+      </div>
+      <button class="modal-close" id="btnClosePresetModal" type="button" aria-label="关闭">×</button>
+    </header>
+    <div class="custom-preset-list" id="customPresetList"></div>
+    <footer class="modal-foot">
+      <button class="btn ghost" id="btnNewPresetFromModal" type="button">＋ 新建自定义规格</button>
+      <button class="btn primary" id="btnDonePresetModal" type="button">完成</button>
+    </footer>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 <div class="print-root" id="printRoot"></div>
 
-<script src="js/data.js?v=20261126d"></script>
-<script src="js/solver.js?v=20261126d"></script>
-<script src="js/render3d.js?v=20261126d"></script>
-<script src="js/plan.js?v=20261126d"></script>
-<script src="js/app.js?v=20261126d"></script>
+<script src="js/data.js?v=20261126k"></script>
+<script src="js/solver.js?v=20261126k"></script>
+<script src="js/render3d.js?v=20261126k"></script>
+<script src="js/plan.js?v=20261126k"></script>
+<script src="js/app.js?v=20261126k"></script>
 </body>
 </html>
+
+
+
+
+
+
+
 

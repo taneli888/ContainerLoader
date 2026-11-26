@@ -415,6 +415,16 @@
     if (arrow) this._pill('柜门 →', arrow.x, arrow.y, 'center', 'rgba(120, 71, 36, .88)');
   };
 
+  Scene.prototype._drawBottomLabel = function (cam) {
+    var m = this.model;
+    if (!m) return;
+    var base = this._project(vec(m.L, m.W / 2, 0), cam);
+    var top = this._project(vec(m.L, m.W / 2, m.H + 80), cam);
+    if (base && top) this._line(base, top, 'rgba(146, 178, 184, .30)', 1, [4, 4]);
+    var p = this._project(vec(m.L, m.W / 2, m.H + 130), cam);
+    if (p) this._pill('柜底 · 装载起点', p.x, p.y, 'center', 'rgba(44, 70, 80, .92)');
+  };
+
   Scene.prototype._arrow = function (a, b, label, cam, dx, dy, color) {
     var pa = this._project(a, cam);
     var pb = this._project(b, cam);
@@ -460,10 +470,10 @@
       arr.forEach(function (p) { v = Math.max(v, p.x + p.l); });
       return v;
     }
-    var lowerLen = maxXOf(lower);
-    var upperLen = maxXOf(upper);
-    if (!isFinite(lowerLen)) lowerLen = maxX;
-    if (!isFinite(upperLen)) upperLen = maxX;
+    var lowerLen = maxXOf(lower) - minX;
+    var upperLen = maxXOf(upper) - minX;
+    if (!isFinite(lowerLen)) lowerLen = maxX - minX;
+    if (!isFinite(upperLen)) upperLen = maxX - minX;
     var door = ps.filter(function (p) { return p.x <= minX + 5; });
     var far = ps.filter(function (p) { return p.x + p.l >= maxX - 5; });
     function spanY(arr) {
@@ -488,8 +498,8 @@
     var z = 12;
     var yLen = m.minY - 170;
     if (m.sideDiff) {
-      this._arrow(vec(m.minX, m.minY - 170, z), vec(m.lowerLen, m.minY - 170, z), '长 ' + Math.round(m.lowerLen), cam, 0, -14);
-      this._arrow(vec(m.minX, m.maxY + 170, z), vec(m.upperLen, m.maxY + 170, z), '长 ' + Math.round(m.upperLen), cam, 0, 14);
+      this._arrow(vec(m.minX, m.minY - 170, z), vec(m.minX + m.lowerLen, m.minY - 170, z), '长 ' + Math.round(m.lowerLen), cam, 0, -14);
+      this._arrow(vec(m.minX, m.maxY + 170, z), vec(m.minX + m.upperLen, m.maxY + 170, z), '长 ' + Math.round(m.upperLen), cam, 0, 14);
     } else {
       this._arrow(vec(m.minX, yLen, z), vec(m.maxX, yLen, z), '实装长 ' + Math.round(m.length), cam, 0, -14);
     }
@@ -502,8 +512,7 @@
   };
 
   Scene.prototype._drawPalletDims = function (p, cam) {
-    var layers = this.showUpper ? (p.count || 1) : 1;
-    var z = p.h * layers + 14;
+    var z = (p.stackHeight || p.h * (p.count || 1)) + 14;
     var origL = p.originalL || p.l;
     var origW = p.originalW || p.w;
     var x0 = p.x, y0 = p.y, x1 = p.x + p.l, y1 = p.y + p.w;
@@ -612,8 +621,10 @@
 
   Scene.prototype._drawSelection = function (p, cam) {
     var x0 = p.x, y0 = p.y, z0 = p.z || 0;
-    var shownLayers = this.showUpper ? (p.count || 1) : 1;
-    var x1 = x0 + p.l, y1 = y0 + p.w, z1 = z0 + p.h * shownLayers;
+    var fullH = p.stackHeight || p.h * (p.count || 1);
+    var firstH = p.layers && p.layers.length ? p.layers[0].h : p.h;
+    var shownH = this.showUpper ? fullH : firstH;
+    var x1 = x0 + p.l, y1 = y0 + p.w, z1 = z0 + shownH;
     var edges = [
       [[x0, y0, z0], [x1, y0, z0]], [[x1, y0, z0], [x1, y1, z0]],
       [[x1, y1, z0], [x0, y1, z0]], [[x0, y1, z0], [x0, y0, z0]],
@@ -671,38 +682,48 @@
 
     (m.placements || []).forEach(function (p) {
       shadows.push(p);
-      var totalCount = Math.max(1, p.count || 1);
-      var count = self.showUpper ? totalCount : 1;
-      var baseColor = hexToRgb(p.solid || p.color || '#c2733c');
-      var tone = .96 + ((p.seq || 0) % 3) * .025;
-      var cargoColor = [baseColor[0] * tone, baseColor[1] * tone, baseColor[2] * tone];
-      // 3D 显示时给托盘之间留一点视觉缝，避免同色托盘连成一整块；不影响计算尺寸。
-      var inset = Math.min(11, p.l * .03, p.w * .03);
-      var q = Object.assign({}, p, {
-        x: p.x + inset,
-        y: p.y + inset,
-        l: Math.max(1, p.l - inset * 2),
-        w: Math.max(1, p.w - inset * 2),
-        count: count
-      });
-      for (var layer = 0; layer < count; layer++) {
-        var z0 = layer * p.h;
-        if (p.baseH > 0) {
-          var base = Object.assign({}, q, { z: z0, h: p.baseH });
+      var layers = p.layers && p.layers.length ? p.layers : (function () {
+        var arr = [];
+        for (var i = 0; i < (p.count || 1); i++) {
+          arr.push({ l: p.l, w: p.w, h: p.h, baseH: p.baseH, code: p.code, fill: p.fill, relX: 0, relY: 0, solid: p.solid, color: p.color });
+        }
+        return arr;
+      })();
+      var shown = self.showUpper ? layers : layers.slice(0, 1);
+      var z0 = 0;
+      for (var li = 0; li < shown.length; li++) {
+        var layer = shown[li];
+        var baseColor = hexToRgb(layer.solid || p.solid || layer.color || '#c2733c');
+        var tone = .96 + ((p.seq || 0) % 3) * .025;
+        var cargoColor = [baseColor[0] * tone, baseColor[1] * tone, baseColor[2] * tone];
+        var inset = Math.min(11, layer.l * .03, layer.w * .03);
+        var q = Object.assign({}, p, {
+          x: p.x + (layer.relX || 0) + inset,
+          y: p.y + (layer.relY || 0) + inset,
+          l: Math.max(1, layer.l - inset * 2),
+          w: Math.max(1, layer.w - inset * 2),
+          h: layer.h,
+          baseH: layer.baseH,
+          code: layer.code,
+          count: shown.length
+        });
+        if (layer.baseH > 0) {
+          var base = Object.assign({}, q, { z: z0, h: layer.baseH });
           var baseFaces = self._boxFaces(base, WOOD, cam, 'base');
           baseFaces.forEach(function (f) { if (f.top) f.fill = rgb(WOOD_TOP, .92); });
           faceQueue.push.apply(faceQueue, baseFaces);
         }
         var cargo = Object.assign({}, q, {
-          z: z0 + (p.baseH || 0),
-          h: Math.max(1, p.h - (p.baseH || 0)),
-          layer: layer
+          z: z0 + (layer.baseH || 0),
+          h: Math.max(1, layer.h - (layer.baseH || 0)),
+          layer: li
         });
         var cargoFaces = self._boxFaces(cargo, cargoColor, cam, 'cargo');
         faceQueue.push.apply(faceQueue, cargoFaces);
-        if (layer === count - 1) {
+        if (li === shown.length - 1) {
           cargoFaces.forEach(function (f) { if (f.top) labels.push(f); });
         }
+        z0 += layer.h;
       }
     });
 
@@ -735,6 +756,7 @@
     this._drawFrame(cam);
     this._drawCargoDims(cam);
     this._drawDoor(cam);
+    this._drawBottomLabel(cam);
 
     var dimTargets = [];
     if (selected) {
@@ -751,8 +773,9 @@
 
     // 选中时给一个轻量的坐标提示
     if (selected) {
-      var shownLayers = this.showUpper ? (selected.count || 1) : 1;
-      var totalH = selected.h * shownLayers;
+      var fullH = selected.stackHeight || selected.h * (selected.count || 1);
+      var firstH = selected.layers && selected.layers.length ? selected.layers[0].h : selected.h;
+      var totalH = this.showUpper ? fullH : firstH;
       var anchor = this._project(vec(selected.x + selected.l / 2, selected.y + selected.w / 2, totalH), cam);
       if (anchor) {
         var dl = selected.originalL || selected.l;

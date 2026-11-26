@@ -225,6 +225,14 @@ async function shot(cdp, name) {
     await sleep(900);
     const customResult = await evaluate(cdp, `({ cards: document.querySelectorAll('.pallet-card').length, total: document.querySelector('#resultTotal').textContent, errorHidden: document.querySelector('#resultError').hidden, error: document.querySelector('#errorText').textContent, typeRows: document.querySelectorAll('.type-row').length, code: __CL_DEBUG.state.pallets[2].code, name: __CL_DEBUG.state.pallets[2].name, presetText: [...document.querySelectorAll('#presetSelect option')].map(o=>o.textContent).join(' | ') })`);
     await shot(cdp, 'desktop-custom-cdp.png');
+    await evaluate(cdp, `document.querySelector('#btnManagePresets').click()`);
+    await sleep(200);
+    const presetBefore = await evaluate(cdp, `({ rows: document.querySelectorAll('.custom-preset-row').length, cards: document.querySelectorAll('.pallet-card').length })`);
+    await shot(cdp, 'desktop-preset-manager-cdp.png');
+    await evaluate(cdp, `document.querySelector('.custom-preset-row button[data-delete-preset]').click()`);
+    await sleep(200);
+    const presetAfter = await evaluate(cdp, `({ rows: document.querySelectorAll('.custom-preset-row').length, cards: document.querySelectorAll('.pallet-card').length, empty: document.querySelectorAll('.custom-empty').length })`);
+    await evaluate(cdp, `document.querySelector('#btnDonePresetModal').click()`);
     await evaluate(cdp, `(() => { const cards=document.querySelectorAll('.pallet-card'); cards[cards.length-1].querySelector('.pallet-remove').click(); })()`);
     await sleep(700);
     const deleted = await evaluate(cdp, `({ cards: document.querySelectorAll('.pallet-card').length, total: document.querySelector('#resultTotal').textContent, errorHidden: document.querySelector('#resultError').hidden })`);
@@ -249,6 +257,44 @@ async function shot(cdp, name) {
       fill: document.querySelector('#resultFill').textContent,
       total: document.querySelector('#resultTotal').textContent
     })`);
+
+    // 叠放优先 / 不叠放优先按钮
+    await evaluate(cdp, `document.querySelector('#prioritySeg button[data-priority="stack"]').click()`);
+    await sleep(700);
+    const priorityStack = await evaluate(cdp, `({ total: document.querySelector('#resultTotal').textContent, stacking: __CL_DEBUG.state.layout.stackingUsed })`);
+    await evaluate(cdp, `document.querySelector('#prioritySeg button[data-priority="single"]').click()`);
+    await sleep(700);
+    const prioritySingle = await evaluate(cdp, `({ total: document.querySelector('#resultTotal').textContent, stacking: __CL_DEBUG.state.layout.stackingUsed })`);
+
+    // 混合叠放：1160×1150 底 + 1120×1120 上
+    await evaluate(cdp, `(() => {
+      __CL_DEBUG.state.pallets = [
+        { id:'mix-big', name:'大托 1160×1150', code:'BIG', l:1160, w:1150, h:1100, baseH:144, qty:9, weight:0, fill:false, color:0 },
+        { id:'mix-small', name:'小托 1120×1120', code:'SM', l:1120, w:1120, h:1100, baseH:144, qty:9, weight:0, fill:false, color:1 }
+      ];
+      __CL_DEBUG.state.options.allowStack = true;
+      __CL_DEBUG.calculate(false);
+    })()`);
+    await sleep(900);
+    const mixedResult = await evaluate(cdp, `({ total: document.querySelector('#resultTotal').textContent, stacks: __CL_DEBUG.state.layout.stackCount, mixed: __CL_DEBUG.state.layout.mixedStacks, badge: document.querySelector('#resultBadge').textContent })`);
+    await shot(cdp, 'desktop-mixed-cdp.png');
+    await evaluate(cdp, `document.querySelector('#btnExample').click()`);
+    await sleep(700);
+
+    // 1200×1000 风车：20 托 / 2 层
+    await evaluate(cdp, `(() => {
+      __CL_DEBUG.state.pallets = [
+        { id:'wind', name:'风车 1200×1000', code:'WIND', l:1200, w:1000, h:1100, baseH:144, qty:20, weight:0, fill:false, color:0 }
+      ];
+      __CL_DEBUG.state.options.allowStack = true;
+      __CL_DEBUG.state.options.preferSingle = true;
+      __CL_DEBUG.calculate(false);
+    })()`);
+    await sleep(900);
+    const windmill = await evaluate(cdp, `({ total: document.querySelector('#resultTotal').textContent, stacks: __CL_DEBUG.state.layout.stackCount, maxH: __CL_DEBUG.state.layout.maxHeight, strat: __CL_DEBUG.state.layout.strategy })`);
+    await shot(cdp, 'desktop-windmill-cdp.png');
+    await evaluate(cdp, `document.querySelector('#btnExample').click()`);
+    await sleep(700);
 
     // 平板 / 窄桌面
     await metrics(cdp, 1024, 900, false);
@@ -319,8 +365,13 @@ async function shot(cdp, name) {
     console.log('GAP20', JSON.stringify(gap, null, 2));
     console.log('ERROR_STATE', JSON.stringify(error, null, 2));
     console.log('CUSTOM', JSON.stringify(customState, null, 2), JSON.stringify(customResult, null, 2));
+    console.log('PRESET_MANAGER', JSON.stringify({ before: presetBefore, after: presetAfter }, null, 2));
     console.log('DELETED', JSON.stringify(deleted, null, 2));
     console.log('FILL_TOGGLE', JSON.stringify({ off: fillOff, on: fillOn }, null, 2));
+    console.log('PRIORITY', JSON.stringify({ stack: priorityStack, single: prioritySingle }, null, 2));
+    console.log('MIXED', JSON.stringify(mixedResult, null, 2));
+    console.log('WINDMILL', JSON.stringify(windmill, null, 2));
+
     console.log('TABLET', JSON.stringify(tablet, null, 2));
     console.log('MOBILE', JSON.stringify(mobile, null, 2));
     console.log('MOBILE_RESULT', JSON.stringify(mobileResult, null, 2));

@@ -111,7 +111,7 @@
         fill: true, color: 1
       }
     ],
-    options: { allowRotate: true, gap: 0, allowStack: true }
+    options: { allowRotate: true, gap: 0, allowStack: true, preferSingle: true, doorGap: 0 }
   };
 
   var DATA = {

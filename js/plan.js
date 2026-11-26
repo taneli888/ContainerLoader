@@ -103,7 +103,7 @@
       arr.forEach(function (p) { lo = Math.min(lo, p.y); hi = Math.max(hi, p.y + p.w); });
       return { lo: lo, hi: hi };
     }
-    var lowerLen = maxEnd(lower), upperLen = maxEnd(upper);
+    var lowerLen = maxEnd(lower) - minX, upperLen = maxEnd(upper) - minX;
     var doorY = yRange(ps.filter(function (p) { return p.x <= minX + 5; }));
     var farY = yRange(ps.filter(function (p) { return p.x + p.l >= maxX - 5; }));
     var sideDiff = Math.abs(lowerLen - upperLen) > 5;
@@ -124,8 +124,8 @@
     }
 
     if (sideDiff) {
-      hDim(Y(0) - 48, X(minX), X(lowerLen), '长 ' + num(lowerLen));
-      hDim(Y(0) - 25, X(minX), X(upperLen), '长 ' + num(upperLen));
+      hDim(Y(0) - 48, X(minX), X(minX + lowerLen), '长 ' + num(lowerLen));
+      hDim(Y(0) - 25, X(minX), X(minX + upperLen), '长 ' + num(upperLen));
     } else {
       hDim(Y(0) - 28, X(minX), X(maxX), '实装长 ' + num(maxX - minX) + ' mm');
     }
@@ -137,8 +137,8 @@
     }
 
     // 方向提示
-    out.push('<text x="' + X(L) + '" y="' + (Y(W) + 28) + '" text-anchor="end" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="9.5" fill="#9aa3a6">柜长方向 →</text>');
-    out.push('<text x="' + (X(0) + 52) + '" y="' + (Y(W) + 24) + '" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="9.5" fill="#9aa3a6">叠放 · 编号为垛位</text>');
+    out.push('<text x="' + X(L) + '" y="' + (Y(W) + 24) + '" text-anchor="end" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="10.5" font-weight="700" fill="#2c4650">柜底 · 装载起点</text>');
+    out.push('<text x="' + (X(0) + 52) + '" y="' + (Y(W) + 24) + '" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="9.5" fill="#9aa3a6">' + (result.stackingUsed ? '叠放' : '单层') + ' · 编号为垛位</text>');
 
     out.push('</svg>');
     return out.join('');
@@ -165,30 +165,36 @@
     out.push('<rect x="' + X(0) + '" y="' + Y(H) + '" width="' + (L * scale) + '" height="' + (H * scale) + '" fill="#faf6ef" stroke="#1d272c" stroke-width="2"/>');
 
     (result.placements || []).forEach(function (p) {
-      var count = Math.max(1, p.count || 1);
-      for (var layer = 0; layer < count; layer++) {
-        var z0 = layer * p.h;
-        var x = X(p.x), y = Y(z0 + p.h), w = p.l * scale, h = p.h * scale;
-        out.push('<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" fill="' + tint(colorOf(p), .22) + '" stroke="' + colorOf(p) + '" stroke-width="1.2"/>');
-        if (p.baseH) {
-          out.push('<rect x="' + x.toFixed(1) + '" y="' + Y(z0 + p.baseH).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + (p.baseH * scale).toFixed(1) + '" fill="rgba(145,97,58,.55)"/>');
+      var layers = p.layers && p.layers.length ? p.layers : (function () {
+        var arr = [];
+        for (var i = 0; i < (p.count || 1); i++) arr.push({ l: p.l, w: p.w, h: p.h, baseH: p.baseH, solid: p.solid, color: p.color, relX: 0 });
+        return arr;
+      })();
+      var z = 0;
+      layers.forEach(function (layer, li) {
+        var x = X(p.x + (layer.relX || 0)), y = Y(z + layer.h), w = layer.l * scale, h = layer.h * scale;
+        out.push('<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" fill="' + tint(colorOf(layer), .22) + '" stroke="' + colorOf(layer) + '" stroke-width="1.2"/>');
+        if (layer.baseH) {
+          out.push('<rect x="' + x.toFixed(1) + '" y="' + Y(z + layer.baseH).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + (layer.baseH * scale).toFixed(1) + '" fill="rgba(145,97,58,.55)"/>');
         }
-        if (layer === count - 1 && w > 18) {
-          out.push('<text x="' + (x + w / 2).toFixed(1) + '" y="' + (y + h * .56).toFixed(1) + '" text-anchor="middle" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="7.5" font-weight="700" fill="#4b5559">' + p.seq + (count > 1 ? ' ×' + count : '') + '</text>');
+        if (li === layers.length - 1 && w > 18) {
+          out.push('<text x="' + (x + w / 2).toFixed(1) + '" y="' + (y + h * .56).toFixed(1) + '" text-anchor="middle" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="7.5" font-weight="700" fill="#4b5559">' + p.seq + (layers.length > 1 ? ' ×' + layers.length : '') + '</text>');
         }
-      }
+        z += layer.h;
+      });
     });
 
     // 门
     out.push('<path d="M' + X(0) + ' ' + Y(H) + 'v' + (H * scale) + '" stroke="#c2733c" stroke-width="2.4"/>');
     out.push('<text x="' + (X(0) - 12) + '" y="' + (Y(H) - 10) + '" text-anchor="end" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="9.5" font-weight="700" fill="#9e5527">柜门</text>');
+    out.push('<text x="' + (X(L) + 8) + '" y="' + (Y(H) - 10) + '" text-anchor="start" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="9.5" font-weight="700" fill="#2c4650">柜底</text>');
 
     // 高度尺寸
     var dimX = X(L) + 24;
     out.push('<path d="M' + dimX + ' ' + Y(0) + 'V' + Y(H) + '" stroke="#8a9295" stroke-width="1"/>');
     out.push('<path d="M' + (dimX - 4) + ' ' + Y(0) + 'h8M' + (dimX - 4) + ' ' + Y(H) + 'h8" stroke="#8a9295" stroke-width="1"/>');
     out.push('<text x="' + (dimX + 9) + '" y="' + Y(H / 2) + '" text-anchor="middle" transform="rotate(90 ' + (dimX + 9) + ' ' + Y(H / 2) + ')" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="10" font-weight="600" fill="#4d585c">内高 ' + num(H) + ' mm</text>');
-    out.push('<text x="' + X(L) + '" y="' + (Y(0) + 21) + '" text-anchor="end" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="9.5" fill="#9aa3a6">叠放侧视 · 未按比例显示托盘间隙</text>');
+    out.push('<text x="' + X(L) + '" y="' + (Y(0) + 21) + '" text-anchor="end" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="9.5" fill="#9aa3a6">' + (result.stackingUsed ? '叠放侧视' : '单层侧视') + ' · 未按比例显示托盘间隙</text>');
     out.push('</svg>');
     return out.join('');
   }
@@ -210,7 +216,7 @@
       if (!count) return '';
       var stacks = (result.stackCounts && result.stackCounts[t.id]) || 0;
       var typePlacements = (result.placements || []).filter(function (p) { return p.typeId === t.id; });
-      var layers = typePlacements.length ? (typePlacements[0].layers || 1) : 1;
+      var layers = typePlacements.length ? ((typePlacements[0].layers && typePlacements[0].layers.length) || 1) : 1;
       return '<tr>' +
         '<td><span style="display:inline-block;width:2.4mm;height:2.4mm;border-radius:.5mm;background:' + esc(t.solid || '#c2733c') + ';margin-right:1.2mm;vertical-align:-.2mm"></span>' + esc(t.name) + '</td>' +
         '<td>' + num(t.l) + ' × ' + num(t.w) + ' × ' + num(t.h) + ' · ' + layers + '层</td>' +
@@ -229,7 +235,7 @@
     var verdict = '必装 ' + num(result.requiredCount) + ' 托全部装入' +
       (result.fillType ? '，另可补柜 ' + num(result.fillCount) + ' 托 ' + esc(result.fillType.name) : '') +
       '。总计 ' + num(result.totalCount) + ' 托、' + num(result.stackCount) + ' 个垛位' +
-      (result.allowStack ? '（同规格叠放）' : '') + '。' +
+      (result.stackingUsed ? '（叠放）' : '（单层）') + '。' +
       (result.optimalByArea ? ' 补柜数量达到面积理论上限。' : '');
     var clearance = result.clearanceWarnings || [];
     if (clearance.length) {
@@ -245,24 +251,30 @@
     var top = topSVG(result, { print: true });
     var side = sideSVG(result);
 
-    var envMaxX = 0, envMaxY = 0;
+    var envMinX = Infinity, envMaxX = 0, envMinY = Infinity, envMaxY = 0;
     (result.placements || []).forEach(function (p) {
+      envMinX = Math.min(envMinX, p.x);
       envMaxX = Math.max(envMaxX, p.x + p.l);
+      envMinY = Math.min(envMinY, p.y);
       envMaxY = Math.max(envMaxY, p.y + p.w);
     });
-    var envText = envMaxX && envMaxY ? (num(envMaxX) + ' × ' + num(envMaxY) + ' mm') : '—';
+    var envText = envMaxX && envMaxY
+      ? (num(envMaxX - envMinX) + ' × ' + num(envMaxY - envMinY) + ' mm')
+      : '—';
 
+    var planMode = result.stackingUsed ? (result.mixedStacks ? '混合叠放装柜方案' : '叠放装柜方案') : '单层装柜方案';
     return '' +
       '<div class="print-sheet">' +
         '<header class="print-head">' +
           '<div class="print-brand">' +
             '<div class="print-logo">CL</div>' +
-            '<div><h1>Container Loader · 集装箱装柜示意图</h1><p>同规格叠放装柜方案 / Container Load Plan</p></div>' +
+            '<div><h1>Container Loader · 集装箱装柜示意图</h1><p>' + planMode + ' / Container Load Plan</p></div>' +
           '</div>' +
           '<div class="print-meta">' +
             '<b>' + esc(c.code) + ' · ' + esc(c.name) + '</b><br>' +
             '内尺寸 ' + num(c.l) + ' × ' + num(c.w) + ' × ' + num(c.h) + ' mm<br>' +
             '实装包络 ' + envText + '<br>' +
+            (result.doorClearance > 0 ? ('柜门余量 ' + num(result.doorClearance) + ' mm<br>') : '') +
             '生成时间 ' + esc(stamp) +
           '</div>' +
         '</header>' +
@@ -288,7 +300,7 @@
           '</div>' +
         '</div>' +
         '<footer class="print-foot">' +
-          '<span><b>说明：</b>编号 P01–P' + String(result.stackCount).padStart(2, '0') + ' 为垛位编号，不代表实际卸货顺序；图中 ×N 表示该垛位叠放 N 托。图为同规格叠放几何排布，不同规格不混叠，不含绑扎、加固、偏载、危险品及目的国道路限重。</span>' +
+          '<span><b>说明：</b>编号 P01–P' + String(result.stackCount).padStart(2, '0') + ' 为垛位编号，不代表实际卸货顺序；图中 ×N 表示该垛位叠放 N 托。图为' + (result.stackingUsed ? '叠放' : '单层') + '几何排布，' + (result.stackingUsed ? '上层长宽不能超过下层；' : '') + '不含绑扎、加固、偏载、危险品及目的国道路限重。</span>' +
           '<span style="white-space:nowrap">Container Loader · 本地计算</span>' +
         '</footer>' +
       '</div>';

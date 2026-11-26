@@ -1,6 +1,7 @@
 tests/*.png
 tests/*.pdf
 tests/*-profile/
+tests/edge-*/
 .DS_Store
 Thumbs.db
 tools/tests/

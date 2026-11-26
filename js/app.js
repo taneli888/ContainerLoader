@@ -18,7 +18,7 @@
     container: { l: 5898, w: 2352, h: 2393, payload: 28200 },
     pallets: [],
     customPresets: [],
-    options: { allowRotate: true, gap: 0, allowStack: true },
+    options: { allowRotate: true, gap: 0, allowStack: true, preferSingle: true, doorGap: 0 },
     showUpperLayer: true,
     autoRotate: 0,
     layout: null,
@@ -61,11 +61,11 @@
     state.pallets.forEach(function (p) { maxLayers = Math.max(maxLayers, layersFor(p)); });
     var note = $('#stackNote');
     var hint = $('#stackHeadHint');
-    if (hint) hint.textContent = state.options.allowStack ? '同规格叠放' : '单层';
+    if (hint) hint.textContent = state.options.allowStack ? '大底小上' : '单层';
     if (!note) return;
     if (state.options.allowStack) {
       note.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5-8 4.5zM4 12l8 4.5 8-4.5M4 15.5 12 20l8-4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>' +
-        '<span>同规格上下叠放，当前最高 <strong>' + maxLayers + ' 层</strong>；层数按柜内净高 ' + state.container.h + 'mm 自动计算，不同规格不混叠。</span>';
+        '<span>叠放时<strong>上面托盘的长短边都不能超过下方托盘</strong>；大托底、小托上可以，反过来不行。层数按 ' + state.container.h + 'mm 净高自动计算。</span>';
     } else {
       note.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5 12 4l8 4.5-8 4.5zM4 12l8 4.5 8-4.5M4 15.5 12 20l8-4.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>' +
         '<span>按<strong>单层、不叠放</strong>计算。高度用于 3D、净高与载重校验。</span>';
@@ -141,7 +141,9 @@
       }) : [];
       state.options.allowRotate = saved.options ? saved.options.allowRotate !== false : true;
       state.options.allowStack = saved.options ? saved.options.allowStack !== false : true;
+      state.options.preferSingle = saved.options ? saved.options.preferSingle !== false : true;
       state.options.gap = Math.max(0, Math.round(Number(saved.options && saved.options.gap) || 0));
+      state.options.doorGap = Math.max(0, Math.round(Number(saved.options && saved.options.doorGap) || 0));
       return true;
     } catch (e) {
       return false;
@@ -222,7 +224,11 @@
     $('#cPayload').value = c.payload;
     $('#allowRotate').checked = !!state.options.allowRotate;
     $('#allowStack').checked = !!state.options.allowStack;
+    $$('#prioritySeg button').forEach(function (b) {
+      b.classList.toggle('active', (b.getAttribute('data-priority') === 'stack') === (state.options.preferSingle === false));
+    });
     $('#gapInput').value = state.options.gap;
+    $('#doorGapInput').value = state.options.doorGap;
     $('#containerSelect').value = DATA.getContainer(state.containerId) ? state.containerId : 'CUSTOM';
     containerMeta();
     updateStackNote();
@@ -279,6 +285,47 @@
 
   function renderPresetSelect() {
     // 预留：如果以后需要按当前柜型筛选预设，可在这里处理。
+  }
+
+  function renderCustomPresetList() {
+    var list = $('#customPresetList');
+    if (!state.customPresets.length) {
+      list.innerHTML = '<div class="custom-empty">还没有自定义规格。点“新建自定义规格”添加。</div>';
+      return;
+    }
+    list.innerHTML = state.customPresets.map(function (p, index) {
+      var color = colorFor(index % DATA.colors.length);
+      return '<div class="custom-preset-row">' +
+        '<i class="dot" style="background:' + esc(color.solid) + '"></i>' +
+        '<div><b>' + esc(p.name) + ' · ' + esc(p.code || '') + '</b>' +
+        '<span>' + p.l + ' × ' + p.w + ' × ' + p.h + ' mm · 单托 ' + (p.weight || 0) + ' kg</span></div>' +
+        '<button type="button" data-delete-preset="' + esc(p.id) + '">删除</button>' +
+      '</div>';
+    }).join('');
+  }
+
+  function openPresetModal() {
+    renderCustomPresetList();
+    $('#presetModal').hidden = false;
+    $('#btnClosePresetModal').focus();
+  }
+
+  function closePresetModal() {
+    $('#presetModal').hidden = true;
+  }
+
+  function deleteCustomPreset(id) {
+    var preset = state.customPresets.filter(function (p) { return p.id === id; })[0];
+    if (!preset) return;
+    state.customPresets = state.customPresets.filter(function (p) { return p.id !== id; });
+    // 已经添加到托盘列表的卡片保留，只是不再关联这个预设。
+    state.pallets.forEach(function (p) {
+      if (p.presetId === id) p.presetId = null;
+    });
+    buildPresetSelect();
+    renderCustomPresetList();
+    saveState();
+    toast('已删除自定义规格：' + preset.name);
   }
 
   function palletHTML(p, index) {
@@ -492,6 +539,14 @@
       p.solid = c.solid;
       p.light = c.light;
       p.dark = c.dark;
+      if (p.layers) {
+        p.layers.forEach(function (layer) {
+          var lc = byId[layer.typeId] || c;
+          layer.solid = lc.solid;
+          layer.light = lc.light;
+          layer.dark = lc.dark;
+        });
+      }
       var t = typeById[p.typeId];
       if (t) {
         p.originalL = t.l;
@@ -647,7 +702,7 @@
       var cm = scene && scene._cargoMetrics ? scene._cargoMetrics() : null;
       $('#sceneDims').innerHTML = '柜内 ' + c.l + ' × ' + c.w + ' × ' + c.h + ' mm<br>' +
         (cm ? ('实装 ' + Math.round(cm.length) + ' × ' + Math.round(cm.width) + ' mm · ') : '') +
-        '最高垛 ' + res.maxHeight + ' mm';
+        '最高垛 ' + res.maxHeight + ' mm' + (res.doorClearance > 0 ? ' · 柜门余 ' + res.doorClearance + ' mm' : '');
     } else {
       $('#footFloor').textContent = '—';
       $('#footFloorBar').style.width = '0%';
@@ -712,16 +767,16 @@
     $('#clearanceCount').textContent = clearance.length ? (clearance.length + ' 项需复核') : '';
     $('#clearanceList').innerHTML = clearance.map(function (w) { return '<li>' + esc(w.text) + '</li>'; }).join('');
 
-    var badge = res.optimalByArea ? '达到面积上限' : (res.fillType ? '条带搜索方案' : '叠放排布');
+    var badge = res.mixedStacks ? '混合叠放方案' : ((!res.stackingUsed && res.allowStack) ? '单层优先' : (res.optimalByArea ? '达到面积上限' : (res.fillType ? '条带搜索方案' : '叠放排布')));
     $('#resultBadge').textContent = badge;
     $('#resultBadge').classList.toggle('warn', !res.optimalByArea && !!res.fillType);
 
     var verdict;
     if (res.fillType) {
-      verdict = '<strong>' + res.requiredCount + ' 托必装全部装入</strong>；补柜规格 ' + esc(fillName) + ' 还能加 <strong>' + res.fillCount + ' 托</strong>，总装载 <strong>' + res.totalCount + ' 托</strong>（' + res.stackCount + ' 个垛位）。';
+      verdict = '<strong>' + res.requiredCount + ' 托必装全部装入</strong>；补柜规格 ' + esc(fillName) + ' 还能加 <strong>' + res.fillCount + ' 托</strong>，总装载 <strong>' + res.totalCount + ' 托</strong>（' + res.stackCount + ' 个垛位）' + (res.mixedStacks ? '，含 ' + res.mixedStacks + ' 个混合叠放垛位' : '') + '。';
       if (res.optimalByArea) verdict += ' 补柜数量已达到按柜底面积计算的理论上限。';
     } else {
-      verdict = '<strong>' + res.requiredCount + ' 托必装全部装入</strong>，共 ' + res.stackCount + ' 个垛位' + (res.allowStack ? '（同规格叠放）' : '') + '。';
+      verdict = '<strong>' + res.requiredCount + ' 托必装全部装入</strong>，共 ' + res.stackCount + ' 个垛位' + (res.mixedStacks ? '（含混合叠放）' : (res.stackingUsed ? '（叠放）' : '（单层）')) + '。';
     }
     $('#verdict').innerHTML = verdict;
 
@@ -761,10 +816,11 @@
     var c = currentContainer();
     if (!res || !res.ok) { $('#layoutNotes').innerHTML = ''; return; }
     var notes = [];
-    if (res.allowStack) {
-      var maxLayers = 1;
-      state.pallets.forEach(function (p) { maxLayers = Math.max(maxLayers, layersFor(p)); });
-      notes.push('按<strong>同规格垂直叠放</strong>计算，最高 <strong>' + maxLayers + ' 层</strong>；不同规格不混叠，层数由柜内净高自动确定。');
+    if (!res.stackingUsed && res.allowStack) {
+      notes.push('单层已经能装下全部必装，按<strong>优先不叠放</strong>采用单层方案；如需用叠放换更多补柜，可取消“优先不叠放”。');
+    }
+    if (res.stackingUsed && res.allowStack) {
+      notes.push('叠放规则：<strong>上面托盘的长边和短边都不超过下方托盘</strong>才允许叠放；大托底、小托上可以，反过来不行。');
     }
     if (res.fillType) {
       if (res.optimalByArea) {
@@ -773,7 +829,8 @@
         notes.push('补柜 <strong>' + res.fillCount + ' 托</strong>；按面积估算的上限为 ' + res.fillUpperBound + ' 托，受柜底长宽组合限制，实际可能低于该上限。');
       }
     }
-    notes.push('共 <strong>' + res.stackCount + ' 个垛位</strong>，必装 ' + res.requiredStacks + ' 垛 + 补柜 ' + res.fillStacks + ' 垛。');
+    notes.push('共 <strong>' + res.stackCount + ' 个垛位</strong>，必装参与 ' + res.requiredStacks + ' 垛 + 补柜纯垛 ' + res.fillStacks + ' 垛' + (res.mixedStacks ? '；其中混合叠放 ' + res.mixedStacks + ' 垛' : '') + '。');
+    if (res.mixedStacks) notes.push('本方案使用了混合叠放，因此不按单一规格的面积上限判断最优。');
     var cm = scene && scene._cargoMetrics ? scene._cargoMetrics() : null;
     if (cm) {
       var env = '实际装载包络 <strong>' + Math.round(cm.length) + ' × ' + Math.round(cm.width) + ' mm</strong>';
@@ -784,6 +841,8 @@
     var rotated = res.placements.filter(function (p) { return p.rotated; }).length;
     if (rotated) notes.push('有 <strong>' + rotated + ' 个垛位</strong> 旋转 90° 摆放，以利用柜宽或柜长方向的空间。');
     notes.push('最高垛 <strong>' + res.maxHeight + ' mm</strong>，柜内净高 ' + c.h + ' mm；顶部余高 ' + Math.max(0, c.h - res.maxHeight) + ' mm。');
+    if (res.doorClearance > 0) notes.push('装载从柜底开始：货物贴紧柜底（装载起点），柜门侧留出 <strong>' + res.doorClearance + ' mm</strong>。');
+    if (res.stackingUsed) notes.push('在整票货内部，<strong>单层/矮垛优先排在柜门侧</strong>，高垛放柜底侧，便于从柜门先卸。');
     notes.push('已用柜底 <strong>' + m2(res.floorUsed) + '</strong>，剩余 <strong>' + m2(res.floorArea - res.floorUsed) + '</strong>；地面利用率 ' + pct(res.floorUtil) + '。');
     if (res.stripCount === 2) {
       var groups = { A: [], B: [] };
@@ -985,6 +1044,24 @@
       if (preset) addPallet(preset);
       $('#presetSelect').value = '';
     });
+    $('#btnManagePresets').addEventListener('click', openPresetModal);
+    $('#btnClosePresetModal').addEventListener('click', closePresetModal);
+    $('#btnDonePresetModal').addEventListener('click', closePresetModal);
+    $('#btnNewPresetFromModal').addEventListener('click', function () {
+      closePresetModal();
+      addPallet(null);
+    });
+    $('#presetModal').addEventListener('click', function (e) {
+      if (e.target === $('#presetModal')) closePresetModal();
+    });
+    $('#customPresetList').addEventListener('click', function (e) {
+      var btn = e.target.closest('button[data-delete-preset]');
+      if (!btn) return;
+      deleteCustomPreset(btn.getAttribute('data-delete-preset'));
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !$('#presetModal').hidden) closePresetModal();
+    });
     $('#btnAddCustom').addEventListener('click', function () { addPallet(null); });
 
     // 参数
@@ -999,8 +1076,21 @@
       saveState();
       calculate(false);
     });
+    $$('#prioritySeg button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        state.options.preferSingle = btn.getAttribute('data-priority') === 'single';
+        $$('#prioritySeg button').forEach(function (b) { b.classList.toggle('active', b === btn); });
+        saveState();
+        calculate(false);
+      });
+    });
     $('#gapInput').addEventListener('input', function (e) {
       state.options.gap = Math.max(0, Math.min(200, Math.round(Number(e.target.value) || 0)));
+      saveState();
+      scheduleCalc();
+    });
+    $('#doorGapInput').addEventListener('input', function (e) {
+      state.options.doorGap = Math.max(0, Math.min(2000, Math.round(Number(e.target.value) || 0)));
       saveState();
       scheduleCalc();
     });

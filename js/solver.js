@@ -74,6 +74,7 @@
     var H = Math.round(Number(container.h) || 0);
     var payload = Math.max(0, Number(container.payload) || 0);
     var gap = Math.max(0, Math.round(Number(options && options.gap) || 0));
+    var doorGap = Math.max(0, Math.round(Number(options && options.doorGap) || 0));
     var allowRotate = !options || options.allowRotate !== false;
     var allowStack = !options || options.allowStack !== false;
 
@@ -112,7 +113,7 @@
     }
 
     return {
-      L: L, W: W, H: H, payload: payload, gap: gap, allowRotate: allowRotate,
+      L: L, W: W, H: H, payload: payload, gap: gap, doorGap: doorGap, allowRotate: allowRotate,
       allowStack: allowStack, pallets: normalized
     };
   }
@@ -246,6 +247,7 @@
         return -Infinity;
       }
 
+      if (!fillType && isZero(counts)) { memo.set(x + '|' + counts.join(','), 0); return 0; }
       var key = x + '|' + counts.join(',');
       if (memo.has(key)) return memo.get(key);
 
@@ -423,15 +425,19 @@
   /* 主求解                                                              */
   /* ------------------------------------------------------------------ */
 
-  function solve(container, pallets, options) {
+  function solveCore(container, pallets, options) {
     var P = prepare(container, pallets, options || {});
     var L = P.L, W = P.W, H = P.H;
     var all = P.pallets;
     var requiredTypes = all.filter(function (t) { return !t.fill && t.qty > 0; });
     var fillType = all.filter(function (t) { return t.fill; })[0] || null;
+    var packingL = L - P.doorGap;
 
     if (!L || !W || !H) {
       return { ok: false, error: '请填写有效的柜内长、宽、高。' };
+    }
+    if (packingL < 300) {
+      return { ok: false, error: '柜门预留 ' + P.doorGap + 'mm 过大，柜内可用长度只剩 ' + Math.max(0, packingL) + 'mm。' };
     }
     if (!requiredTypes.length && !fillType) {
       return { ok: false, error: '请至少添加一种托盘规格。' };
@@ -468,15 +474,16 @@
       requiredStacks += t.stackQty;
     });
     var floorArea = L * W;
-    if (requiredStackArea > floorArea + EPS) {
+    if (requiredStackArea > packingL * W + EPS) {
       return {
         ok: false,
-        error: '必装按 ' + requiredStacks + ' 个垛位计算，占地 ' + (requiredStackArea / 1e6).toFixed(2) + ' m²，超过柜底 ' + (floorArea / 1e6).toFixed(2) + ' m²。',
+        error: '必装按 ' + requiredStacks + ' 个垛位计算，占地 ' + (requiredStackArea / 1e6).toFixed(2) + ' m²，超过柜内可用柜底 ' + ((packingL * W) / 1e6).toFixed(2) + ' m²（已预留柜门 ' + P.doorGap + 'mm）。',
         requiredArea: requiredArea,
         floorArea: floorArea,
         suggestions: [
           '换更大的柜型，或减少必装数量。',
-          P.allowStack ? '当前已启用同规格叠放；可增加每垛层数上限或更换更高柜型。' : '打开“允许同规格叠放”可以减少所需垛位。'
+          P.allowStack ? '当前已启用同规格叠放；可增加每垛层数上限或更换更高柜型。' : '打开“允许同规格叠放”可以减少所需垛位。',
+          P.doorGap > 0 ? '减小“柜门预留”后再计算。' : '检查托盘旋转和柜门预留设置。'
         ]
       };
     }
@@ -484,7 +491,7 @@
     var fillUpperBound = null;
     var fillLayers = fillType ? fillType.layers : 1;
     if (fillType) {
-      var fillStacksMax = Math.floor((floorArea - requiredStackArea) / fillType.effArea + EPS);
+      var fillStacksMax = Math.floor((packingL * W - requiredStackArea) / fillType.effArea + EPS);
       fillUpperBound = Math.max(0, fillStacksMax) * fillLayers;
       if (fillUpperBound < 0) fillUpperBound = 0;
     }
@@ -507,7 +514,7 @@
       var plans = [];
       for (var s = 0; s < strips.length; s++) {
         var req = strips.length === 1 ? reqCountsFor(requiredTypes) : allocation[s];
-        var plan = stripPlan(L, strips[s].depth, req);
+        var plan = stripPlan(packingL, strips[s].depth, req);
         if (!plan) return null;
         plans.push({ plan: plan, y0: strips[s].y0 });
       }
@@ -576,15 +583,19 @@
       var reqPlacements = placements.filter(function (p) { return !p.fill; });
       var fillBox = bbox(fillPlacements);
       var reqBox = bbox(reqPlacements);
+      var maxX = 0;
+      placements.forEach(function (p) { maxX = Math.max(maxX, p.x + p.l); });
+      var doorClear = Math.max(0, L - maxX);
       var fillCompact = fillPlacements.length ? 1 - fillBox.area / floorArea : 0;
       var reqCompact = reqPlacements.length ? 1 - reqBox.area / floorArea : 0;
-      var score = fillCount * 1e12 + fillCompact * 1e8 + reqCompact * 1e6 + (placements.length * 1e-3);
+      var score = fillCount * 1e12 + doorClear * 1e8 + fillCompact * 1e6 + reqCompact * 1e4 + (placements.length * 1e-3);
 
       return {
         placements: placements,
         fillCount: fillCount,
         fillStacks: fillStacks,
         stackCount: placements.length,
+        doorClear: doorClear,
         score: score,
         stripCount: strips.length,
         cut: strips.length === 1 ? W : strips[1].y0
@@ -618,6 +629,49 @@
       }
     }
 
+    // 3) 1200×1000 两排风车（20GP 专用候选，最多 10 个地面垛位）。
+    //    普通横竖排法在 5898 长度下会差一点，风车能放下 10 个。
+    if (requiredTypes.length === 1 && !fillType && L >= 5898 && W >= 2352 && P.allowRotate) {
+      var wt = requiredTypes[0];
+      var perStack = P.allowStack ? 2 : 1;
+      var windCap = perStack * 10;
+      if (wt.l === 1200 && wt.w === 1000 && wt.qty <= windCap) {
+        var windTpl = [
+          [0, 0, 1200, 1000], [1200, 0, 1000, 1200], [1000, 1208, 1200, 1000],
+          [0, 1002, 1000, 1200], [2201, 0, 1000, 1200], [3201, 2, 1000, 1200],
+          [2200, 1203, 1200, 1000], [3418, 1202, 1200, 1000], [4698, 1200, 1200, 1000],
+          [4898, 0, 1000, 1200]
+        ];
+        var windPlaces = [];
+        var remainW = wt.qty;
+        for (var wi = 0; wi < windTpl.length && remainW > 0; wi++) {
+          var wc = Math.min(perStack, remainW);
+          windPlaces.push({
+            typeId: wt.id, name: wt.name, code: wt.code, color: wt.color, fill: false,
+            x: windTpl[wi][0] + (L - 5898), y: windTpl[wi][1] + (W - 2352) / 2,
+            z: 0, l: windTpl[wi][2], w: windTpl[wi][3], h: wt.h, baseH: wt.baseH,
+            weight: wt.weight, rotated: windTpl[wi][2] === wt.w,
+            count: wc, stackHeight: wc * wt.h, strip: 'W', order: wi,
+            baseL: windTpl[wi][2], baseW: windTpl[wi][3]
+          });
+          remainW -= wc;
+        }
+        if (remainW === 0) {
+          var windCand = {
+            placements: windPlaces,
+            fillCount: 0,
+            fillStacks: 0,
+            stackCount: windPlaces.length,
+            doorClear: 0,
+            score: 5e7,
+            stripCount: 1,
+            cut: W
+          };
+          if (!best || windCand.score > best.score) best = windCand;
+        }
+      }
+    }
+
     if (!best) {
       return {
         ok: false,
@@ -632,26 +686,167 @@
       };
     }
 
-    // 结果统计
+    // 先为每个垛位生成逐层记录。
+    best.placements.forEach(function (p) {
+      p.baseL = p.l;
+      p.baseW = p.w;
+      p.layers = [];
+      p.stackHeight = 0;
+      for (var i = 0; i < p.count; i++) {
+        p.layers.push({
+          typeId: p.typeId, name: p.name, code: p.code, color: p.color,
+          fill: p.fill, l: p.l, w: p.w, h: p.h, baseH: p.baseH,
+          weight: p.weight, rotated: p.rotated, relX: 0, relY: 0
+        });
+        p.stackHeight += p.h;
+      }
+    });
+
+    // 混合叠放：上面托盘的长短边都不超过下面托盘时，才能叠。
+    // 支持“大托底 + 小托上”，但 1120 底 + 1160 上这种反过来不允许。
+    function fitsOn(topL, topW, bottomL, bottomW) {
+      var a = topL >= topW ? [topL, topW] : [topW, topL];
+      var b = bottomL >= bottomW ? [bottomL, bottomW] : [bottomW, bottomL];
+      return a[0] <= b[0] + EPS && a[1] <= b[1] + EPS;
+    }
+
+    var mixedStacks = 0;
+    var addedFillStacks = 0;
+    var mergeGuard = 0;
+    var changed = true;
+    while (P.allowStack && changed && mergeGuard++ < 120) {
+      changed = false;
+      var byArea = best.placements.slice().sort(function (a, b) { return b.l * b.w - a.l * a.w; });
+      outer:
+      for (var bi = 0; bi < byArea.length; bi++) {
+        var bottom = byArea[bi];
+        if (best.placements.indexOf(bottom) < 0) continue;
+        var bottomTop = bottom.layers[bottom.layers.length - 1];
+        for (var ti = 0; ti < best.placements.length; ti++) {
+          var top = best.placements[ti];
+          if (top === bottom) continue;
+          if (bottom.stackHeight + top.stackHeight > H + EPS) continue;
+          if (!fitsOn(top.l, top.w, bottomTop.l, bottomTop.w)) continue;
+          // 把 top 的层整体叠到 bottom 的最后一层上，中心对齐被支撑面。
+          var supportCX = (bottomTop.relX || 0) + bottomTop.l / 2;
+          var supportCY = (bottomTop.relY || 0) + bottomTop.w / 2;
+          top.layers.forEach(function (layer) {
+            bottom.layers.push(Object.assign({}, layer, {
+              relX: supportCX - layer.l / 2,
+              relY: supportCY - layer.w / 2
+            }));
+            bottom.stackHeight += layer.h;
+            bottom.count += 1;
+          });
+          bottom.fill = bottom.fill || top.fill;
+          var freed = { x: top.x, y: top.y, l: top.l, w: top.w };
+          best.placements.splice(ti, 1);
+          // 让出的地面优先补一个满垛补柜，保持柜底利用率。
+          if (fillType) {
+            var orients = [{ l: fillType.l, w: fillType.w, rotated: false }];
+            if (P.allowRotate && fillType.l !== fillType.w) orients.push({ l: fillType.w, w: fillType.l, rotated: true });
+            var chosen = null;
+            for (var oi = 0; oi < orients.length; oi++) {
+              if (fitsOn(orients[oi].l, orients[oi].w, freed.l, freed.w)) { chosen = orients[oi]; break; }
+            }
+            if (chosen) {
+              var fillCount = fillType.layers;
+              var fillStackH = fillCount * fillType.h;
+              if (fillStackH <= H + EPS) {
+                var fillLayers = [];
+                for (var fl = 0; fl < fillCount; fl++) {
+                  fillLayers.push({
+                    typeId: fillType.id, name: fillType.name, code: fillType.code,
+                    color: fillType.color, fill: true, l: chosen.l, w: chosen.w,
+                    h: fillType.h, baseH: fillType.baseH, weight: fillType.weight,
+                    rotated: chosen.rotated, relX: 0, relY: 0
+                  });
+                }
+                best.placements.push({
+                  typeId: fillType.id, name: fillType.name, code: fillType.code,
+                  color: fillType.color, fill: true,
+                  x: freed.x, y: freed.y, z: 0,
+                  l: chosen.l, w: chosen.w, h: fillType.h, baseH: fillType.baseH,
+                  weight: fillType.weight, rotated: chosen.rotated,
+                  count: fillCount, stackHeight: fillStackH, layers: fillLayers,
+                  baseL: chosen.l, baseW: chosen.w,
+                  strip: bottom.strip, order: 9999 + addedFillStacks
+                });
+                addedFillStacks++;
+              }
+            }
+          }
+          changed = true;
+          break outer;
+        }
+      }
+    }
+
+    // 没有叠放的矮垛 / 单层优先靠柜门；比较原方向和镜像方向，取更靠近柜门的一种。
+    var maxX = 0;
+    best.placements.forEach(function (p) { maxX = Math.max(maxX, p.x + p.l); });
+    var scoreOrig = 0, scoreMirror = 0;
+    best.placements.forEach(function (p) {
+      var center = p.x + p.l / 2;
+      var h = p.stackHeight || p.h;
+      scoreOrig += h * center;
+      scoreMirror += h * (maxX - center);
+    });
+    if (scoreMirror < scoreOrig) {
+      best.placements.forEach(function (p) { p.x = maxX - (p.x + p.l); });
+    }
+
+    // 从里到外装载：整票货对齐柜头（x 最大端），余量留在柜门处。
+    // 叠放前已把矮垛/单层排在靠门方向，所以柜门侧先是最矮的货。
+    maxX = 0;
+    best.placements.forEach(function (p) { maxX = Math.max(maxX, p.x + p.l); });
+    var shiftX = Math.max(0, L - maxX);
+    best.placements.forEach(function (p) { p.x += shiftX; });
+    var doorClearance = Infinity;
+    best.placements.forEach(function (p) { doorClearance = Math.min(doorClearance, p.x); });
+    if (!isFinite(doorClearance)) doorClearance = 0;
+    best.placements.forEach(function (p) {
+      var ids = Object.create(null);
+      p.layers.forEach(function (l) { ids[l.typeId] = true; });
+      if (Object.keys(ids).length > 1) mixedStacks++;
+    });
+
+    // 结果统计（按逐层实际托盘统计）
     var totalWeight = 0;
     var weightKnown = false;
     var typeCounts = Object.create(null);
     var stackCounts = Object.create(null);
     var totalCount = 0;
+    var actualFillCount = 0;
+    var actualRequiredCount = 0;
     best.placements.forEach(function (p) {
-      totalCount += p.count;
-      totalWeight += (p.weight || 0) * p.count;
-      if (p.weight > 0) weightKnown = true;
-      typeCounts[p.typeId] = (typeCounts[p.typeId] || 0) + p.count;
-      stackCounts[p.typeId] = (stackCounts[p.typeId] || 0) + 1;
+      var ids = Object.create(null);
+      p.layers.forEach(function (layer) {
+        totalCount++;
+        totalWeight += layer.weight || 0;
+        if (layer.weight > 0) weightKnown = true;
+        typeCounts[layer.typeId] = (typeCounts[layer.typeId] || 0) + 1;
+        ids[layer.typeId] = true;
+        if (layer.fill) actualFillCount++;
+        else actualRequiredCount++;
+      });
+      Object.keys(ids).forEach(function (id) { stackCounts[id] = (stackCounts[id] || 0) + 1; });
+    });
+    var actualRequiredStacks = 0;
+    var actualFillStacks = 0;
+    best.placements.forEach(function (p) {
+      var hasReq = p.layers.some(function (l) { return !l.fill; });
+      var hasFill = p.layers.some(function (l) { return l.fill; });
+      if (hasReq) actualRequiredStacks++;
+      if (hasFill && !hasReq) actualFillStacks++;
     });
 
     var usedArea = 0;
     var usedVolume = 0;
     var maxH = 0;
     best.placements.forEach(function (p) {
-      usedArea += p.l * p.w;
-      usedVolume += p.l * p.w * p.h * p.count;
+      usedArea += p.baseL * p.baseW;
+      p.layers.forEach(function (layer) { usedVolume += layer.l * layer.w * layer.h; });
       maxH = Math.max(maxH, p.stackHeight || p.h);
     });
 
@@ -663,7 +858,7 @@
       warnings.push('已按 ' + P.gap + 'mm 托盘间隙计算，实际装柜请预留叉车操作空间。');
     }
     if (P.allowStack) {
-      warnings.push('按同规格垂直叠放计算：每垛层数由柜内净高自动确定，不同规格不混叠。');
+      warnings.push('按叠放计算：上面托盘的长短边都不超过下方托盘时才允许叠放。');
     }
 
     best.placements.sort(function (a, b) { return a.order - b.order; });
@@ -729,14 +924,16 @@
         l: L, w: W, h: H, payload: P.payload
       },
       placements: best.placements,
-      requiredCount: requiredCount,
-      requiredStacks: requiredStacks,
-      fillCount: best.fillCount,
-      fillStacks: best.fillStacks,
-      stackCount: best.stackCount,
+      requiredCount: actualRequiredCount,
+      requiredStacks: actualRequiredStacks,
+      fillCount: actualFillCount,
+      fillStacks: actualFillStacks,
+      stackCount: best.placements.length,
       totalCount: totalCount,
       fillUpperBound: fillUpperBound,
-      optimalByArea: fillType ? best.fillCount >= fillUpperBound : false,
+      optimalByArea: fillType && mixedStacks === 0 && addedFillStacks === 0 ? actualFillCount >= fillUpperBound : false,
+      mixedStacks: mixedStacks,
+      addedFillStacks: addedFillStacks,
       floorArea: floorArea,
       floorUsed: usedArea,
       floorUtil: floorArea ? usedArea / floorArea : 0,
@@ -748,6 +945,9 @@
       payload: P.payload,
       maxHeight: maxH,
       gap: P.gap,
+      doorGap: P.doorGap,
+      packingLength: packingL,
+      doorClearance: doorClearance,
       allowRotate: P.allowRotate,
       allowStack: P.allowStack,
       cutsTried: cuts.length + 1,
@@ -767,8 +967,49 @@
         l: fillType.l, w: fillType.w, h: fillType.h, color: fillType.color,
         layers: fillType.layers
       } : null,
-      solveLabel: fillType && best.fillCount >= fillUpperBound ? '达到面积上限' : '条带搜索'
+      solveLabel: fillType && mixedStacks === 0 && addedFillStacks === 0 && actualFillCount >= fillUpperBound ? '达到面积上限' : '条带搜索'
     };
+  }
+
+  /*
+   * 外层策略：
+   * - 关闭叠放：直接按单层算。
+   * - 没有补柜（都是实际数量）：先试单层，单层放得下就不叠。
+   * - 有补柜：比较单层和叠放，补柜数量更多的优先；数量相同时优先单层。
+   */
+  function solve(container, pallets, options) {
+    var base = Object.assign({}, options || {});
+    var singleOpts = Object.assign({}, base, { allowStack: false });
+
+    if (base.allowStack === false) {
+      var onlySingle = solveCore(container, pallets, singleOpts);
+      if (onlySingle) { onlySingle.stackingUsed = false; onlySingle.strategy = 'single'; }
+      return onlySingle;
+    }
+
+    var single = solveCore(container, pallets, singleOpts);
+    // 默认：不叠放优先。单层能装下全部必装就不叠。
+    if (base.preferSingle !== false && single && single.ok) {
+      single.stackingUsed = false;
+      single.strategy = 'single-preferred';
+      single.allowStack = true;
+      return single;
+    }
+
+    // 叠放优先：先尝试叠放；叠放放不下再退回单层。
+    var stacked = solveCore(container, pallets, base);
+    if (stacked && stacked.ok) {
+      stacked.stackingUsed = true;
+      stacked.strategy = 'stacked-preferred';
+      return stacked;
+    }
+    if (single && single.ok) {
+      single.stackingUsed = false;
+      single.strategy = 'single-fallback';
+      single.allowStack = true;
+      return single;
+    }
+    return stacked || single;
   }
 
   var API = {
@@ -784,3 +1025,6 @@
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   root.CL_SOLVER = API;
 })(typeof window !== 'undefined' ? window : globalThis);
+
+
+

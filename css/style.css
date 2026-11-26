@@ -523,6 +523,30 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .add-custom:hover { border-color: var(--accent); color: var(--accent-dark); background: #fffaf3; }
 
 /* ------------------------------- 开关 / 参数 ------------------------------- */
+.priority-seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card-soft);
+}
+.priority-seg button {
+  height: 32px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 650;
+}
+.priority-seg button.active {
+  background: var(--teal);
+  color: #fff8ef;
+  box-shadow: 0 3px 8px rgba(23, 36, 43, .15);
+}
+
 .switch-row {
   display: flex;
   align-items: center;
@@ -530,8 +554,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   gap: 12px;
   padding: 8px 0;
   cursor: pointer;
-}
-.switch-row > span { display: flex; flex-direction: column; gap: 2px; }
+}.switch-row > span { display: flex; flex-direction: column; gap: 2px; }
 .switch-row b { font-size: 14px; font-weight: 650; }
 .switch-row small { color: var(--faint); font-size: 12px; line-height: 1.35; }
 .switch-row input { position: absolute; opacity: 0; pointer-events: none; }
@@ -1143,7 +1166,83 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .tab.active { background: var(--teal); color: #fff8ef; }
 .tab.active svg { color: #f3cba4; }
 
-.toast {
+.manage-presets { display: block; margin: 7px 0 0 auto; font-size: 10.5px; }
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(23, 36, 43, .42);
+  backdrop-filter: blur(4px);
+}
+.modal[hidden] { display: none; }
+.modal-card {
+  width: min(560px, 100%);
+  max-height: min(78vh, 680px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: 0 28px 70px rgba(23, 36, 43, .3);
+  overflow: hidden;
+}
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.modal-head h3 { margin: 0; font-size: 16px; }
+.modal-head p { margin: 4px 0 0; color: var(--faint); font-size: 10.5px; line-height: 1.45; }
+.modal-close {
+  flex: 0 0 auto;
+  width: 28px; height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--card-soft);
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+}
+.modal-close:hover { background: var(--danger-soft); color: var(--danger); }
+.custom-preset-list { padding: 12px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.custom-preset-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card-soft);
+}
+.custom-preset-row .dot { width: 9px; height: 28px; border-radius: 3px; background: var(--accent); flex: 0 0 auto; }
+.custom-preset-row div { flex: 1; min-width: 0; }
+.custom-preset-row b { display: block; font-size: 12px; }
+.custom-preset-row span { display: block; color: var(--faint); font-size: 10px; margin-top: 2px; }
+.custom-preset-row button {
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 7px;
+  padding: 6px 8px;
+  background: transparent;
+  color: var(--danger);
+  font-size: 10.5px;
+  font-weight: 650;
+}
+.custom-preset-row button:hover { background: var(--danger-soft); }
+.custom-empty { color: var(--faint); font-size: 12px; padding: 14px 0; text-align: center; }
+.modal-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 18px 15px;
+  border-top: 1px solid var(--line);
+}
   position: fixed;
   left: 50%;
   bottom: 28px;
