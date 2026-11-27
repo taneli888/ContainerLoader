@@ -118,6 +118,36 @@
     });
   }
 
+  function buildHighFirstPlacements(placements, L, W, gap, allowRotate) {
+    var highs = placements.filter(function (p) { return p.count > 1; });
+    var lows = placements.filter(function (p) { return p.count === 1; });
+    if (!highs.length || !lows.length) return null;
+    function units(arr) {
+      return arr.map(function (p) {
+        return {
+          t: { l: p.l, w: p.w, h: p.h, baseH: p.baseH, color: p.color, name: p.name, code: p.code },
+          count: p.count, src: p
+        };
+      });
+    }
+    var hp = packUnitsBottomLeft(units(highs), 0, L, W, allowRotate, null, gap);
+    if (!hp) return null;
+    var highEnd = 0;
+    hp.forEach(function (p) { highEnd = Math.max(highEnd, p.x + p.l); });
+    var lp = packUnitsBottomLeft(units(lows), 0, L, W, allowRotate, hp, gap);
+    if (!lp) return null;
+    var out = [];
+    function copy(src, p) {
+      return Object.assign({}, src, {
+        x: p.x, y: p.y, l: p.l, w: p.w, rotated: p.rotated,
+        gap: gap, baseL: p.l, baseW: p.w
+      });
+    }
+    hp.forEach(function (p) { out.push(copy(p.src, p)); });
+    lp.forEach(function (p) { out.push(copy(p.src, p)); });
+    return out;
+  }
+
   // 每个托盘都尝试向 X=0（柜底）和 Y=0 顶到不能顶为止。
   // 这是几何紧凑化，不改变层数/数量，也不做任何居中或均分。
   function compactPlacements(placements, L, W, preserveSingles) {
@@ -671,7 +701,7 @@
         typeId: t.id, name: t.name, code: t.code, color: t.color, fill: !!t.fill,
         x: best.x, y: best.y, z: 0, l: best.l, w: best.w, h: t.h, baseH: t.baseH,
         weight: t.weight, rotated: best.rotated, count: u.count, stackHeight: u.count * t.h,
-        strip: 'M', order: placed.length, baseL: best.l, baseW: best.w, gap: g
+        strip: 'M', order: placed.length, baseL: best.l, baseW: best.w, gap: g, src: u.src
       });
     }
     return placed;
@@ -1359,6 +1389,22 @@
       }
     }
 
+    // 高层垛优先集中到柜底：用单元级 Bottom-Left 重新排一次，单层只放在其后。
+    var highFirst = P.allowStack ? buildHighFirstPlacements(best.placements, packingL, W, P.gap, P.allowRotate) : null;
+    if (highFirst) {
+      var hfMax = 0, oldMax = 0, hfHighMax = 0, oldHighMax = 0;
+      highFirst.forEach(function (p) {
+        hfMax = Math.max(hfMax, p.x + p.l);
+        if (p.count > 1) hfHighMax = Math.max(hfHighMax, p.x + p.l);
+      });
+      best.placements.forEach(function (p) {
+        oldMax = Math.max(oldMax, p.x + p.l);
+        if (p.count > 1) oldHighMax = Math.max(oldHighMax, p.x + p.l);
+      });
+      // 高层垛明显更靠柜底时采用；长度可以略增，但不能超出柜门预留。
+      if (hfMax <= packingL + EPS && hfHighMax + 100 < oldHighMax) best.placements = highFirst;
+    }
+
     // 二次紧凑化：X 向柜底、Y 向左侧内壁，真实矩形碰撞检测。
     // 有叠放垛时，单层垛不再被拉回柜底——单层要留在柜门侧。
     var hasHighStack = best.placements.some(function (p) { return p.count > 1; });
@@ -1916,6 +1962,8 @@
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   root.CL_SOLVER = API;
 })(typeof window !== 'undefined' ? window : globalThis);
+
+
 
 
 

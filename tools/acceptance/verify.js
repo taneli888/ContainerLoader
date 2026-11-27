@@ -79,6 +79,16 @@ ok('MIX 上托不悬空', mx.r.ok && mx.r.placements.every(function (p) {
   });
 }));
 
+// 高层垛必须优先靠柜底
+var hb = run(c20, [P('1120', 1120, 1120, 10), P('EUR', 1200, 800, 4)]);
+valid('1120×10 + EUR×4', hb);
+var highMax = hb.r.ok ? Math.max.apply(null, hb.r.placements.filter(function (p) { return p.count > 1; }).map(function (p) { return p.x + p.baseL; })) : 1e9;
+var lowMax = hb.r.ok ? Math.max.apply(null, hb.r.placements.filter(function (p) { return p.count === 1; }).map(function (p) { return p.x + p.baseL; })) : 0;
+var highMinX = hb.r.ok ? Math.min.apply(null, hb.r.placements.filter(function (p) { return p.count > 1; }).map(function (p) { return p.x; })) : 1e9;
+ok('1120×10 + EUR×4 有混合高低层', hb.r.ok && hb.r.placements.some(function (p) { return p.count > 1; }) && hb.r.placements.some(function (p) { return p.count === 1; }));
+ok('叠放垛靠柜底（最靠底高层在 X=0）', highMinX === 0, String(highMinX));
+ok('叠放垛不排到单层之后', highMax <= lowMax, 'high ' + highMax + ' / low ' + lowMax);
+
 // P1-6 门高
 var tall = run(c20, [P('TALL', 1200, 800, 2, false, 2350)]);
 ok('门高 2350 > 2280 被拒绝', !tall.r.ok && /门高/.test(tall.r.error || ''), tall.r.error || '');
