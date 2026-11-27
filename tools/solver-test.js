@@ -130,7 +130,8 @@ const big = { id: 'big', name: 'big', code: 'BIG', l: 1160, w: 1150, h: 1100, ba
 const small = { id: 'small', name: 'small', code: 'SM', l: 1120, w: 1120, h: 1100, baseH: 144, qty: 9, weight: 0, fill: false, color: 1 };
 const mixed = scenario('1160 大托 + 1120 小托（允许大底小上）', c20, [big, small]);
 validatePlan('MIXED', mixed, c20);
-check('混合叠放检查不破坏几何', mixed.ok, mixed.ok ? '' : mixed.error);
+check('1160×1150 可承载 1120×1120 上托', mixed.ok && mixed.mixedStacks >= 1, mixed.ok ? String(mixed.mixedStacks) : '');
+check('混合垛上托不悬空', mixed.ok && mixed.placements.every((p) => (p.layers || []).every((ly, i, arr) => i === 0 || (ly.relX >= -0.01 && ly.relY >= -0.01 && ly.relX + ly.l <= arr[i - 1].l + 0.01 && ly.relY + ly.w <= arr[i - 1].w + 0.01))));
 check('混合叠放没有重复计数', mixed.ok && mixed.totalCount === 18, mixed.ok ? String(mixed.totalCount) : '');
 
 const windP = { id: 'wind', name: '风车 1200×1000', code: 'WIND', l: 1200, w: 1000, h: 1100, baseH: 144, qty: 20, weight: 0, fill: false, color: 0 };

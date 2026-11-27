@@ -67,6 +67,18 @@ var d300 = run(c20, [P('EUR', 1200, 800, 10)], { doorGap: 300 });
 valid('DOOR300 10 EUR', d300);
 ok('DOOR300 不侵入预留', d300.r.ok && d300.r.placements.every(function (p) { return p.x + p.l <= 5898 - 300 + 1.5; }));
 
+// P1-5 大底小上混合叠放
+var mx = run(c20, [P('BIG', 1160, 1150, 9), P('SM', 1120, 1120, 9)]);
+valid('MIX 1160×1150 + 1120×1120', mx);
+ok('MIX 生成混合垛 >= 1', mx.r.ok && mx.r.mixedStacks >= 1, mx.r.ok ? String(mx.r.mixedStacks) : '');
+ok('MIX 上托不悬空', mx.r.ok && mx.r.placements.every(function (p) {
+  return (p.layers || []).every(function (ly, i, arr) {
+    if (i === 0) return true;
+    var lo = arr[i - 1];
+    return ly.relX >= -0.01 && ly.relY >= -0.01 && ly.relX + ly.l <= lo.l + 0.01 && ly.relY + ly.w <= lo.w + 0.01;
+  });
+}));
+
 // P1-6 门高
 var tall = run(c20, [P('TALL', 1200, 800, 2, false, 2350)]);
 ok('门高 2350 > 2280 被拒绝', !tall.r.ok && /门高/.test(tall.r.error || ''), tall.r.error || '');
