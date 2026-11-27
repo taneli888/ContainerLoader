@@ -772,16 +772,6 @@
     res.floorUsed = used;
     res.floorUtil = res.floorArea ? used / res.floorArea : 0;
     res.manual = true;
-    if (window.CL_SOLVER && typeof window.CL_SOLVER.analyzePlacements === 'function') {
-      var m = window.CL_SOLVER.analyzePlacements(res.container || currentContainer(), res.placements, { doorGap: res.doorGap });
-      res.totalWeight = m.totalWeight;
-      res.frontHalfWeight = m.frontHalfWeight;
-      res.backHalfWeight = m.backHalfWeight;
-      res.cog = m.cog;
-      res.cogOffset = m.cogOffset;
-      res.clearanceWarnings = m.clearanceWarnings;
-      res.clearanceOk = m.clearanceOk;
-    }
     updateStageCopy();
     if (final) {
       renderResult();
@@ -1045,6 +1035,106 @@
     setTimeout(function () { window.print(); }, 60);
   }
 
+  function isInAppWebView() {
+    var ua = navigator.userAgent || '';
+    return /MicroMessenger|QQ\/|Weibo|DingTalk|AlipayClient/i.test(ua);
+  }
+
+  function ensureHtml2Pdf(cb) {
+    if (window.html2pdf) {
+      cb(null, window.html2pdf);
+      return;
+    }
+    var script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+    script.onload = function () {
+      if (window.html2pdf) cb(null, window.html2pdf);
+      else cb(new Error('PDF 组件初始化失败'));
+    };
+    script.onerror = function () {
+      cb(new Error('PDF 组件加载失败，请检查网络连接'));
+    };
+    document.head.appendChild(script);
+  }
+
+  function savePdfNow() {
+    if (!state.layout || !state.layout.ok) {
+      toast('当前没有可导出的装载方案');
+      return;
+    }
+    if (isInAppWebView()) {
+      toast('微信/内置浏览器可能拦截文件下载，如未弹出保存请点右上角「···」用默认浏览器打开');
+    } else {
+      toast('正在生成 A4 PDF 装箱图，请稍候…');
+    }
+
+    var btns = [$('#btnSavePdf'), $('#btnSavePdfTop')].filter(Boolean);
+    btns.forEach(function (b) { b.disabled = true; });
+
+    ensureHtml2Pdf(function (err, html2pdfFn) {
+      if (err) {
+        btns.forEach(function (b) { b.disabled = false; });
+        toast(err.message + '，可尝试使用系统浏览器打印另存为 PDF');
+        return;
+      }
+
+      buildPrint();
+      var srcSheet = $('#printRoot .print-sheet');
+      if (!srcSheet) {
+        btns.forEach(function (b) { b.disabled = false; });
+        toast('生成内容为空，请重新计算方案');
+        return;
+      }
+
+      var host = document.createElement('div');
+      host.className = 'pdf-export-host';
+      var clone = srcSheet.cloneNode(true);
+      host.appendChild(clone);
+      document.body.appendChild(host);
+
+      var c = currentContainer();
+      var code = (c && c.code ? c.code : 'Container').replace(/[^a-zA-Z0-9_-]/g, '');
+      var d = new Date();
+      var ymd = d.getFullYear() +
+        String(d.getMonth() + 1).padStart(2, '0') +
+        String(d.getDate()).padStart(2, '0');
+      var filename = 'Container-Loader-' + code + '-' + ymd + '.pdf';
+
+      var opt = {
+        margin: [25.4, 31.7, 20, 31.7],
+        filename: filename,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: {
+          scale: 2.5,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false
+        },
+        jsPDF: {
+          unit: 'mm',
+          format: 'a4',
+          orientation: 'portrait'
+        },
+        pagebreak: { mode: ['avoid-all', 'css'] }
+      };
+
+      setTimeout(function () {
+        html2pdfFn().set(opt).from(clone).save()
+          .then(function () {
+            if (host.parentNode) host.parentNode.removeChild(host);
+            btns.forEach(function (b) { b.disabled = false; });
+            toast('PDF 已生成：' + filename);
+          })
+          .catch(function (e) {
+            if (host.parentNode) host.parentNode.removeChild(host);
+            btns.forEach(function (b) { b.disabled = false; });
+            console.error(e);
+            toast('PDF 生成失败，请尝试在手机浏览器菜单中选择「分享 → 打印 → 存为 PDF」');
+          });
+      }, 120);
+    });
+  }
+
   function exportJSON() {
     var res = state.layout;
     if (!res || !res.ok) { toast('当前没有可导出的方案'); return; }
@@ -1246,6 +1336,8 @@
     $('#btnCalc').addEventListener('click', function () { calculate(true); });
     $('#btnCalcTop').addEventListener('click', function () { calculate(true); });
     $('#btnExample').addEventListener('click', setExample);
+    $('#btnSavePdf').addEventListener('click', savePdfNow);
+    $('#btnSavePdfTop').addEventListener('click', savePdfNow);
     $('#btnPrint').addEventListener('click', printNow);
     $('#btnPrintTop').addEventListener('click', printNow);
     $('#btnExport').addEventListener('click', exportJSON);

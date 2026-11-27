@@ -13,7 +13,7 @@
   <link rel="icon" type="image/svg+xml" href="icons/favicon.svg">
   <link rel="apple-touch-icon" href="icons/icon-180.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="css/style.css?v=20261127v11">
+  <link rel="stylesheet" href="css/style.css?v=20261127v12">
 </head>
 <body data-mobile-tab="input">
 
@@ -34,7 +34,11 @@
   <div class="top-actions">
     <span class="local-pill"><i></i>本地计算</span>
     <button class="btn ghost hide-sm" id="btnExample" type="button">恢复示例</button>
-    <button class="btn ghost" id="btnPrintTop" type="button">
+    <button class="btn ghost" id="btnSavePdfTop" type="button">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 17v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      存PDF
+    </button>
+    <button class="btn ghost hide-sm" id="btnPrintTop" type="button">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
       打印
     </button>
@@ -336,9 +340,13 @@
       </section>
 
       <div class="result-actions" id="resultActions">
-        <button class="btn primary wide" id="btnPrint" type="button">
+        <button class="btn primary wide" id="btnSavePdf" type="button">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 17v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          保存 A4 PDF 装箱图
+        </button>
+        <button class="btn ghost wide hide-sm" id="btnPrint" type="button">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5M7 18H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2M7 14h10v6H7z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
-          打印 A4 装箱图
+          直接打印（电脑端）
         </button>
         <button class="btn ghost wide" id="btnExport" type="button">导出方案 JSON</button>
       </div>
@@ -386,7 +394,8 @@
 <script src="js/data.js?v=20261127g"></script>
 <script src="js/solver.js?v=20261127g"></script>
 <script src="js/render3d.js?v=20261127g"></script>
-<script src="js/plan.js?v=20261127v11"></script>
-<script src="js/app.js?v=20261127g"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
+<script src="js/plan.js?v=20261127v12"></script>
+<script src="js/app.js?v=20261127v12"></script>
 </body>
 </html>

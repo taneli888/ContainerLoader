@@ -1442,6 +1442,190 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
 
+
+/* 共享 A4 打印与 PDF 导出样式（确保手机端导出 PDF 与电脑端打印 100% 样式一致） */
+.print-sheet {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  color: #111;
+  background: #fff;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.print-sheet * { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-sizing: border-box; }
+.print-sheet h1, .print-sheet h2, .print-sheet p { margin: 0; }
+
+.print-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3mm;
+  width: 100%;
+  border-bottom: 1.2pt solid #1d272c;
+  padding-bottom: 2mm;
+  margin-bottom: 2mm;
+}
+.print-brand { display: flex; align-items: center; gap: 2.5mm; }
+.print-logo {
+  width: 8.5mm; height: 8.5mm;
+  border-radius: 1.6mm;
+  background: #c2733c;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 11pt;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+.print-brand h1 { font-size: 11pt; letter-spacing: -.2px; line-height: 1.2; color: #111; }
+.print-brand p { font-size: 7.5pt; color: #555; margin-top: .5mm; }
+.print-meta { text-align: right; font-size: 7.5pt; color: #444; line-height: 1.4; }
+.print-meta b { color: #111; font-size: 8.5pt; }
+
+.print-kpi-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 1mm 3mm;
+  width: 100%;
+  background: #fbf7f0;
+  border: .3mm solid #d9cebe;
+  border-radius: 1.5mm;
+  padding: 1.5mm 2.6mm;
+  margin-bottom: 2.2mm;
+  font-size: 8.5pt;
+  color: #333;
+}
+.print-kpi-bar b { color: #17242b; font-size: 9pt; }
+
+.print-views {
+  display: block;
+  width: 100%;
+  margin: 0 0 2.5mm 0;
+  padding: 0;
+}
+.print-view-box {
+  display: block;
+  width: 100%;
+  margin-bottom: 1.6mm;
+  border: .3mm solid #d9cebe;
+  border-radius: 1.5mm;
+  overflow: hidden;
+  background: #fff;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+.print-view-box:last-child { margin-bottom: 0; }
+.print-top-box svg,
+.print-side-box svg {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+.print-bottom {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2.2mm;
+  width: 100%;
+}
+
+.print-clearance {
+  width: 100%;
+  padding: 1.8mm 2.6mm;
+  border: .35mm solid #e5a99c;
+  border-radius: 1.5mm;
+  background: #fff6f4;
+  color: #c82315;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+.print-clearance-title {
+  font-size: 8.8pt;
+  font-weight: 700;
+  color: #c82315;
+  margin-bottom: .5mm;
+}
+.print-clearance ul {
+  margin: 0;
+  padding-left: 4mm;
+  font-size: 8.2pt;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #c82315;
+}
+.print-clearance li { color: #c82315; }
+
+.print-table {
+  width: 100%;
+  border: .3mm solid #cbbba6;
+  border-radius: 1.5mm;
+  overflow: hidden;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+.print-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8.8pt;
+}
+.print-table th {
+  text-align: left;
+  color: #222;
+  font-weight: 700;
+  padding: 1.6mm 2.4mm;
+  border-bottom: .35mm solid #cbbba6;
+  background: #faf6ef;
+  font-size: 8.2pt;
+  white-space: nowrap;
+}
+.print-table td {
+  padding: 1.6mm 2.4mm;
+  border-bottom: .2mm solid #ece4d8;
+  line-height: 1.38;
+  white-space: nowrap;
+}
+.print-table tbody tr:last-child td { border-bottom: 0; }
+.print-table td.num, .print-table th.num { text-align: right; }
+
+.print-foot {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 4mm;
+  padding: 1.8mm 2.6mm;
+  border: .3mm solid #e2d8c9;
+  border-radius: 1.5mm;
+  background: #fcfaf6;
+  color: #333;
+  font-size: 8pt;
+  line-height: 1.45;
+}
+.print-foot b { color: #111; }
+.print-sign {
+  white-space: nowrap;
+  color: #758084;
+  font-size: 7.5pt;
+  font-weight: 600;
+}
+
+/* 离屏 PDF 生成容器：模拟 A4 去除左右 31.7mm 边距后的可用版心宽度 (210 - 63.4 = 146.6mm) */
+.pdf-export-host {
+  position: fixed;
+  left: -99999px;
+  top: 0;
+  width: 146.6mm;
+  background: #fff;
+  color: #111;
+  font-size: 9.5pt;
+  z-index: -1;
+  pointer-events: none;
+}
+
 /* ------------------------------- 打印 ------------------------------- */
 .print-root { display: none; }
 
