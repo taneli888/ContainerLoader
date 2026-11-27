@@ -89,6 +89,12 @@ ok('1120×10 + EUR×4 有混合高低层', hb.r.ok && hb.r.placements.some(funct
 ok('叠放垛靠柜底（最靠底高层在 X=0）', highMinX === 0, String(highMinX));
 ok('叠放垛不排到单层之后', highMax <= lowMax, 'high ' + highMax + ' / low ' + lowMax);
 
+// 三规格：大底小上必须允许
+var tri = run(c20, [P('EUR', 1200, 800, 7), P('1120', 1120, 1120, 13), P('BIG', 1160, 1150, 1)]);
+valid('7 EUR + 13×1120 + 1×1160', tri);
+ok('三规格混合后能装下 21 托', tri.r.ok && tri.r.totalCount === 21, tri.r.ok ? String(tri.r.totalCount) : tri.r.error);
+ok('三规格生成大底小上混合垛', tri.r.ok && tri.r.mixedStacks >= 1, tri.r.ok ? String(tri.r.mixedStacks) : '');
+
 // P1-6 门高
 var tall = run(c20, [P('TALL', 1200, 800, 2, false, 2350)]);
 ok('门高 2350 > 2280 被拒绝', !tall.r.ok && /门高/.test(tall.r.error || ''), tall.r.error || '');

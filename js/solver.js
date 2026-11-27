@@ -1796,98 +1796,111 @@
 
   function buildMixedStackPlan(container, pallets, options) {
     var required = pallets.filter(function (p) { return !p.fill && Number(p.qty) > 0; });
-    if (required.length !== 2 || pallets.some(function (p) { return p.fill; })) return null;
-    var a = required[0], b = required[1];
+    if (required.length < 2 || pallets.some(function (p) { return p.fill; })) return null;
     function fits(top, bottom) {
       var aa = top.l >= top.w ? [top.l, top.w] : [top.w, top.l];
       var bb = bottom.l >= bottom.w ? [bottom.l, bottom.w] : [bottom.w, bottom.l];
       return aa[0] <= bb[0] + EPS && aa[1] <= bb[1] + EPS;
     }
-    var big = a, small = b;
-    if (fits(a, b) && !fits(b, a)) { big = b; small = a; }
-    else if (!fits(a, b) && fits(b, a)) { big = a; small = b; }
-    else if (fits(a, b) && fits(b, a)) {
-      if (a.l * a.w < b.l * b.w) { big = b; small = a; }
-    } else return null;
-
-    var mixId = '__mix_' + big.id + '_' + small.id;
-    var best = null;
-    var maxM = Math.min(big.qty, small.qty);
-    var ms = [];
-    [1, 2, 3, 4, 6, 8, 10, maxM].forEach(function (m) {
-      m = Math.floor(m);
-      if (m > 0 && m <= maxM && ms.indexOf(m) < 0) ms.push(m);
-    });
-    ms.forEach(function (m) {
-      var syn = [];
-      if (big.qty > m) syn.push(Object.assign({}, big, { qty: big.qty - m }));
-      if (small.qty > m) syn.push(Object.assign({}, small, { qty: small.qty - m }));
-      syn.push({
-        id: mixId, name: '混合垛 ' + big.name + ' + ' + small.name,
-        code: 'MIX', l: big.l, w: big.w, h: big.h + small.h, baseH: big.baseH,
-        qty: m, weight: (big.weight || 0) + (small.weight || 0), fill: false, color: big.color
-      });
-      var res = solveCore(container, syn, Object.assign({}, options, {
-        allowStack: true, noMerge: true, timeBudget: 500, preferSingle: false
-      }));
-      if (!res || !res.ok) return;
-      var mixedCount = 0;
-      res.placements.forEach(function (p) {
-        if (p.typeId !== mixId) return;
-        p.layers = [
-          {
-            typeId: big.id, name: big.name, code: big.code, color: big.color, fill: false,
-            l: p.l, w: p.w, h: big.h, baseH: big.baseH, weight: big.weight,
-            rotated: !!p.rotated, relX: 0, relY: 0
-          },
-          {
-            typeId: small.id, name: small.name, code: small.code, color: small.color, fill: false,
-            l: small.l, w: small.w, h: small.h, baseH: small.baseH, weight: small.weight,
-            rotated: false, relX: (p.l - small.l) / 2, relY: (p.w - small.w) / 2
-          }
-        ];
-        p.count = 2;
-        p.h = big.h;
-        p.typeId = big.id;
-        p.name = big.name;
-        p.code = big.code;
-        p.color = big.color;
-        p.baseL = p.l;
-        p.baseW = p.w;
-        p.stackHeight = big.h + small.h;
-        p.mixed = true;
-        mixedCount++;
-      });
-      if (!mixedCount) return;
-
-      var typeCounts = {}, stackCounts = {}, requiredCount = 0, totalCount = 0, totalWeight = 0, maxHeight = 0;
-      res.placements.forEach(function (p) {
-        var ids = {};
-        p.layers.forEach(function (ly) {
-          typeCounts[ly.typeId] = (typeCounts[ly.typeId] || 0) + 1;
-          ids[ly.typeId] = true;
-          totalCount++;
-          totalWeight += ly.weight || 0;
-          requiredCount += ly.fill ? 0 : 1;
-        });
-        Object.keys(ids).forEach(function (id) { stackCounts[id] = (stackCounts[id] || 0) + 1; });
-        maxHeight = Math.max(maxHeight, p.stackHeight || p.h);
-      });
-      res.typeCounts = typeCounts;
-      res.stackCounts = stackCounts;
-      res.requiredCount = requiredCount;
-      res.totalCount = totalCount;
-      res.totalWeight = totalWeight;
-      res.weightKnown = true;
-      res.maxHeight = maxHeight;
-      res.mixedStacks = mixedCount;
-      res.stackingUsed = true;
-      res.allowStack = true;
-      res.strategy = 'mixed-stack';
-      if (!best || res.stackCount < best.stackCount ||
-          (res.stackCount === best.stackCount && res.mixedStacks > best.mixedStacks)) {
-        best = res;
+    var pairs = [];
+    for (var i = 0; i < required.length; i++) {
+      for (var j = i + 1; j < required.length; j++) {
+        var a = required[i], b = required[j];
+        var big = null, small = null;
+        if (fits(a, b) && !fits(b, a)) { big = b; small = a; }
+        else if (!fits(a, b) && fits(b, a)) { big = a; small = b; }
+        else if (fits(a, b) && fits(b, a) && a.l * a.w !== b.l * b.w) {
+          if (a.l * a.w > b.l * b.w) { big = a; small = b; } else { big = b; small = a; }
+        }
+        if (big && small) pairs.push([big, small]);
       }
+    }
+    if (!pairs.length) return null;
+
+    var best = null;
+    pairs.forEach(function (pair) {
+      var big = pair[0], small = pair[1];
+      var mixId = '__mix_' + big.id + '_' + small.id;
+      var maxM = Math.min(big.qty, small.qty);
+      var ms = [];
+      [1, 2, 3, 4, 6, 8, 10, maxM].forEach(function (m) {
+        m = Math.floor(m);
+        if (m > 0 && m <= maxM && ms.indexOf(m) < 0) ms.push(m);
+      });
+      ms.forEach(function (m) {
+        var syn = [];
+        required.forEach(function (t) {
+          if (t.id !== big.id && t.id !== small.id) syn.push(Object.assign({}, t));
+        });
+        if (big.qty > m) syn.push(Object.assign({}, big, { qty: big.qty - m }));
+        if (small.qty > m) syn.push(Object.assign({}, small, { qty: small.qty - m }));
+        syn.push({
+          id: mixId, name: '混合垛 ' + big.name + ' + ' + small.name,
+          code: 'MIX', l: big.l, w: big.w, h: big.h + small.h, baseH: big.baseH,
+          qty: m, weight: (big.weight || 0) + (small.weight || 0), fill: false, color: big.color
+        });
+        var res = solveCore(container, syn, Object.assign({}, options, {
+          allowStack: true, noMerge: true, timeBudget: 700, preferSingle: false
+        }));
+        if (!res || !res.ok) return;
+        var mixedCount = 0;
+        res.placements.forEach(function (p) {
+          if (p.typeId !== mixId) return;
+          p.layers = [
+            {
+              typeId: big.id, name: big.name, code: big.code, color: big.color, fill: false,
+              l: p.l, w: p.w, h: big.h, baseH: big.baseH, weight: big.weight,
+              rotated: !!p.rotated, relX: 0, relY: 0
+            },
+            {
+              typeId: small.id, name: small.name, code: small.code, color: small.color, fill: false,
+              l: small.l, w: small.w, h: small.h, baseH: small.baseH, weight: small.weight,
+              rotated: false, relX: (p.l - small.l) / 2, relY: (p.w - small.w) / 2
+            }
+          ];
+          p.count = 2;
+          p.h = big.h;
+          p.typeId = big.id;
+          p.name = big.name;
+          p.code = big.code;
+          p.color = big.color;
+          p.baseL = p.l;
+          p.baseW = p.w;
+          p.stackHeight = big.h + small.h;
+          p.mixed = true;
+          mixedCount++;
+        });
+        if (!mixedCount) return;
+
+        var typeCounts = {}, stackCounts = {}, requiredCount = 0, totalCount = 0, totalWeight = 0, maxHeight = 0;
+        res.placements.forEach(function (p) {
+          var ids = {};
+          p.layers.forEach(function (ly) {
+            typeCounts[ly.typeId] = (typeCounts[ly.typeId] || 0) + 1;
+            ids[ly.typeId] = true;
+            totalCount++;
+            totalWeight += ly.weight || 0;
+            requiredCount += ly.fill ? 0 : 1;
+          });
+          Object.keys(ids).forEach(function (id) { stackCounts[id] = (stackCounts[id] || 0) + 1; });
+          maxHeight = Math.max(maxHeight, p.stackHeight || p.h);
+        });
+        res.typeCounts = typeCounts;
+        res.stackCounts = stackCounts;
+        res.requiredCount = requiredCount;
+        res.totalCount = totalCount;
+        res.totalWeight = totalWeight;
+        res.weightKnown = true;
+        res.maxHeight = maxHeight;
+        res.mixedStacks = mixedCount;
+        res.stackingUsed = true;
+        res.allowStack = true;
+        res.strategy = 'mixed-stack';
+        if (!best || res.stackCount < best.stackCount ||
+            (res.stackCount === best.stackCount && res.mixedStacks > best.mixedStacks)) {
+          best = res;
+        }
+      });
     });
     return best;
   }
@@ -1937,7 +1950,7 @@
         return stamp(single);
       }
       var least = solveLeastStacking(container, work, base);
-      if (least && least.ok && (!mixedPlan || least.stackCount <= mixedPlan.stackCount)) return stamp(least);
+      if (least && least.ok && (!mixedPlan || least.stackCount >= Math.ceil(mixedPlan.stackCount * 1.2))) return stamp(least);
       if (mixedPlan) return stamp(mixedPlan);
       if (least && least.ok) return stamp(least);
     }
