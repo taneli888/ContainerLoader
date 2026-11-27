@@ -212,6 +212,7 @@
     var types = meta.types || [];
     var hasFill = !!result.fillType;
     var rows = types.map(function (t) {
+      if (result.mergedMap && result.mergedMap[t.id] && result.mergedMap[t.id] !== t.id) return '';
       var count = result.typeCounts[t.id] || 0;
       if (!count) return '';
       var stacks = (result.stackCounts && result.stackCounts[t.id]) || 0;

@@ -144,7 +144,7 @@
         var target = 0;
         placements.forEach(function (q) {
           if (q === p || !overlapsY(p, q)) return;
-          if (q.x + q.l <= p.x + EPS) target = Math.max(target, q.x + q.l);
+          if (q.x + q.l + (q.gap || 0) <= p.x + EPS) target = Math.max(target, q.x + q.l + (q.gap || 0));
         });
         if (target < p.x - EPS) {
           p.x = target;
@@ -162,7 +162,7 @@
         var target = 0;
         placements.forEach(function (q) {
           if (q === p || !overlapsX(p, q)) return;
-          if (q.y + q.w <= p.y + EPS) target = Math.max(target, q.y + q.w);
+          if (q.y + q.w + (q.gap || 0) <= p.y + EPS) target = Math.max(target, q.y + q.w + (q.gap || 0));
         });
         if (target < p.y - EPS) {
           p.y = target;
@@ -192,11 +192,14 @@
     var L = Math.round(Number(container.l) || 0);
     var W = Math.round(Number(container.w) || 0);
     var H = Math.round(Number(container.h) || 0);
+    var doorW = Math.max(0, Math.round(Number(container.doorW) || 0));
+    var doorH = Math.max(0, Math.round(Number(container.doorH) || 0));
     var payload = Math.max(0, Number(container.payload) || 0);
     var gap = Math.max(0, Math.round(Number(options && options.gap) || 0));
     var doorGap = Math.max(0, Math.round(Number(options && options.doorGap) || 0));
     var allowRotate = !options || options.allowRotate !== false;
     var allowStack = !options || options.allowStack !== false;
+    var allowFillStack = !options || options.allowFillStack !== false;
 
     var normalized = [];
     for (var i = 0; i < pallets.length; i++) {
@@ -207,11 +210,11 @@
       var baseH = Math.max(0, Math.round(Number(p.baseH) || 0));
       var qty = Math.max(0, Math.round(Number(p.qty) || 0));
       if (!rawL || !rawW || !h) continue;
-      var layers = allowStack ? Math.max(1, Math.floor(H / h)) : 1;
+      var layers = (p.fill ? allowFillStack : allowStack) ? Math.max(1, Math.floor(H / h)) : 1;
       if (!isFinite(layers) || layers < 1) layers = 1;
       var stackQty = Math.ceil(qty / layers);
       var override = options && options.stackUnitCounts && options.stackUnitCounts[String(p.id || ('p' + i))];
-      if (override != null && allowStack) {
+      if (override != null && allowStack && !p.fill) {
         stackQty = Math.max(Math.ceil(qty / layers), Math.min(qty, Math.round(Number(override) || 0)));
       }
       normalized.push({
@@ -238,7 +241,7 @@
     }
 
     return {
-      L: L, W: W, H: H, payload: payload, gap: gap, doorGap: doorGap, allowRotate: allowRotate,
+      L: L, W: W, H: H, doorW: doorW, doorH: doorH, payload: payload, gap: gap, doorGap: doorGap, allowRotate: allowRotate,
       allowStack: allowStack, noMerge: !!(options && options.noMerge), pallets: normalized
     };
   }
@@ -450,6 +453,7 @@
           _effY: yOffset,
           _effL: slot.len,
           _effW: slot.wid,
+          gap: t._gap || 0,
           _gap: t._gap || 0,
           order: order++
         });
@@ -622,8 +626,9 @@
     return gap;
   }
 
-  function packUnitsBottomLeft(units, startX, L, W, allowRotate, obstacles) {
+  function packUnitsBottomLeft(units, startX, L, W, allowRotate, obstacles, gap) {
     var placed = [];
+    var g = gap || 0;
     var fixed = obstacles || [];
     for (var i = 0; i < units.length; i++) {
       var u = units[i];
@@ -632,8 +637,8 @@
       var orients = typeOrientations(t, allowRotate);
       var xs = [startX];
       var ys = [0];
-      fixed.forEach(function (q) { xs.push(q.x, q.x + q.l); ys.push(q.y, q.y + q.w); });
-      placed.forEach(function (q) { xs.push(q.x + q.l); ys.push(q.y + q.w); });
+      fixed.forEach(function (q) { xs.push(q.x, q.x + q.l + g); ys.push(q.y, q.y + q.w + g); });
+      placed.forEach(function (q) { xs.push(q.x + q.l + g); ys.push(q.y + q.w + g); });
       xs = xs.filter(function (v, idx, arr) { return v >= startX - EPS && arr.indexOf(v) === idx; });
       ys = ys.filter(function (v, idx, arr) { return v >= -EPS && arr.indexOf(v) === idx; });
       for (var oi = 0; oi < orients.length; oi++) {
@@ -645,14 +650,14 @@
             var hit = false;
             for (var fi = 0; fi < fixed.length; fi++) {
               var f = fixed[fi];
-              if (x < f.x + f.l - EPS && f.x < x + o.l - EPS &&
-                  y < f.y + f.w - EPS && f.y < y + o.w - EPS) { hit = true; break; }
+              if (x < f.x + f.l + g - EPS && f.x < x + o.l + g - EPS &&
+                  y < f.y + f.w + g - EPS && f.y < y + o.w + g - EPS) { hit = true; break; }
             }
             if (hit) continue;
             for (var qi = 0; qi < placed.length; qi++) {
               var q = placed[qi];
-              if (x < q.x + q.l - EPS && q.x < x + o.l - EPS &&
-                  y < q.y + q.w - EPS && q.y < y + o.w - EPS) { hit = true; break; }
+              if (x < q.x + q.l + g - EPS && q.x < x + o.l + g - EPS &&
+                  y < q.y + q.w + g - EPS && q.y < y + o.w + g - EPS) { hit = true; break; }
             }
             if (hit) continue;
             if (!best || x < best.x - EPS || (Math.abs(x - best.x) < EPS && y < best.y - EPS)) {
@@ -666,7 +671,7 @@
         typeId: t.id, name: t.name, code: t.code, color: t.color, fill: !!t.fill,
         x: best.x, y: best.y, z: 0, l: best.l, w: best.w, h: t.h, baseH: t.baseH,
         weight: t.weight, rotated: best.rotated, count: u.count, stackHeight: u.count * t.h,
-        strip: 'M', order: placed.length, baseL: best.l, baseW: best.w
+        strip: 'M', order: placed.length, baseL: best.l, baseW: best.w, gap: g
       });
     }
     return placed;
@@ -781,11 +786,11 @@
           var highRes = solveCore(
             { l: L - doorDepth, w: W, h: P.H, payload: P.payload },
             highPallets,
-            { allowRotate: P.allowRotate, gap: 0, allowStack: true, preferSingle: false, doorGap: 0, noMixed: true, noMerge: true }
+            { allowRotate: P.allowRotate, gap: P.gap, allowStack: true, preferSingle: false, doorGap: 0, noMixed: true, noMerge: true }
           );
           if (highRes && highRes.ok) {
             var highs2 = highRes.placements;
-            var lows2 = packUnitsBottomLeft(lowUnits, L - doorDepth, L, W, P.allowRotate);
+            var lows2 = packUnitsBottomLeft(lowUnits, L - doorDepth, L, W, P.allowRotate, null, P.gap);
             if (lows2) consider(highs2, lows2);
           }
         }
@@ -793,10 +798,10 @@
     }
 
     orders.forEach(function (order) {
-      var highs = packUnitsBottomLeft(order, 0, L, W, P.allowRotate);
+      var highs = packUnitsBottomLeft(order, 0, L, W, P.allowRotate, null, P.gap);
       if (!highs) return;
       var highEnd = Math.max.apply(null, highs.map(function (p) { return p.x + p.l; }));
-      var lows = packUnitsBottomLeft(lowUnits, highEnd, L, W, P.allowRotate, highs);
+      var lows = packUnitsBottomLeft(lowUnits, highEnd, L, W, P.allowRotate, highs, P.gap);
       consider(highs, lows);
 
       // 单层只有 1 托时，优先把它固定在柜门边，再把高层垛绕开它排。
@@ -813,19 +818,19 @@
                       typeId: pair[0].t.id, name: pair[0].t.name, code: pair[0].t.code, color: pair[0].t.color, fill: false,
                       x: L - o1.l - of1, y: ys3[0], z: 0, l: o1.l, w: o1.w, h: pair[0].t.h, baseH: pair[0].t.baseH,
                       weight: pair[0].t.weight, rotated: o1.rotated, count: 1, stackHeight: pair[0].t.h,
-                      strip: 'M', order: 0, baseL: o1.l, baseW: o1.w
+                      strip: 'M', order: 0, gap: P.gap, baseL: o1.l, baseW: o1.w
                     };
                     var p2 = {
                       typeId: pair[1].t.id, name: pair[1].t.name, code: pair[1].t.code, color: pair[1].t.color, fill: false,
                       x: L - o2.l - of2, y: ys3[1], z: 0, l: o2.l, w: o2.w, h: pair[1].t.h, baseH: pair[1].t.baseH,
                       weight: pair[1].t.weight, rotated: o2.rotated, count: 1, stackHeight: pair[1].t.h,
-                      strip: 'M', order: 1, baseL: o2.l, baseW: o2.w
+                      strip: 'M', order: 1, gap: P.gap, baseL: o2.l, baseW: o2.w
                     };
                     if (p1.x < 0 || p2.x < 0) return;
                     if (p1.y + p1.w > W + EPS || p2.y + p2.w > W + EPS) return;
                     if (p1.x < p2.x + p2.l - EPS && p2.x < p1.x + p1.l - EPS &&
                         p1.y < p2.y + p2.w - EPS && p2.y < p1.y + p1.w - EPS) return;
-                    var h2 = packUnitsBottomLeft(order, 0, L, W, P.allowRotate, [p1, p2]);
+                    var h2 = packUnitsBottomLeft(order, 0, L, W, P.allowRotate, [p1, p2], P.gap);
                     if (h2) consider(h2, [p1, p2]);
                   });
                 });
@@ -848,9 +853,9 @@
                 typeId: lu.t.id, name: lu.t.name, code: lu.t.code, color: lu.t.color, fill: false,
                 x: lx, y: ly, z: 0, l: o.l, w: o.w, h: lu.t.h, baseH: lu.t.baseH,
                 weight: lu.t.weight, rotated: o.rotated, count: 1, stackHeight: lu.t.h,
-                strip: 'M', order: 0, baseL: o.l, baseW: o.w
+                strip: 'M', order: 0, gap: P.gap, baseL: o.l, baseW: o.w
               };
-              var h2 = packUnitsBottomLeft(order, 0, L, W, P.allowRotate, [lp]);
+              var h2 = packUnitsBottomLeft(order, 0, L, W, P.allowRotate, [lp], P.gap);
               if (h2) consider(h2, [lp]);
             });
           });
@@ -904,7 +909,7 @@
           x: bandX + row * bestO.l, y: col * bestO.w, z: 0,
           l: bestO.l, w: bestO.w, h: gt.h, baseH: gt.baseH, weight: gt.weight,
           rotated: bestO.rotated, count: gc[ui], stackHeight: gc[ui] * gt.h,
-          strip: 'B', order: placements.length, baseL: bestO.l, baseW: bestO.w,
+          strip: 'B', order: placements.length, baseL: bestO.l, baseW: bestO.w, gap: P.gap,
           typeOrder: g.typeOrder
         });
       }
@@ -934,7 +939,7 @@
             x: bandX + frow * bestF.l, y: fcol * bestF.w, z: 0,
             l: bestF.l, w: bestF.w, h: fillType.h, baseH: fillType.baseH, weight: fillType.weight,
             rotated: bestF.rotated, count: fillType.layers, stackHeight: fillType.layers * fillType.h,
-            strip: 'B', order: placements.length, baseL: bestF.l, baseW: bestF.w, typeOrder: requiredTypes.length
+            strip: 'B', order: placements.length, baseL: bestF.l, baseW: bestF.w, gap: P.gap, typeOrder: requiredTypes.length
           });
         }
         fillCount = bestF.total;
@@ -983,6 +988,7 @@
 
     // 尺寸合法性
     var bad = null;
+    var doorWarnings = [];
     requiredTypes.concat(fillType ? [fillType] : []).forEach(function (t) {
       if (bad) return;
       var canOrient = P.allowRotate;
@@ -992,6 +998,13 @@
         bad = '托盘「' + t.name + '」的底面尺寸 ' + t.l + '×' + t.w + 'mm 放不进柜底 ' + L + '×' + W + 'mm。';
       } else if (t.h > H) {
         bad = '托盘「' + t.name + '」总高 ' + t.h + 'mm，超过柜内净高 ' + H + 'mm。';
+      } else if (P.doorH > 0 && t.h > P.doorH) {
+        bad = '托盘「' + t.name + '」总高 ' + t.h + 'mm，超过柜门高 ' + P.doorH + 'mm，无法进柜。';
+      } else if (P.doorW > 0 && Math.min(t.l, t.w) > P.doorW) {
+        doorWarnings.push('托盘「' + t.name + '」短边 ' + Math.min(t.l, t.w) + 'mm 超过门宽 ' + P.doorW + 'mm，请现场复核。');
+      }
+      if (P.doorH > 0 && t.stackHeight > P.doorH) {
+        doorWarnings.push('托盘「' + t.name + '」叠放后垛高 ' + t.stackHeight + 'mm 超过门高 ' + P.doorH + 'mm，整垛不能直接进柜，需在柜内分拆叠放。');
       }
     });
     if (bad) return { ok: false, error: bad };
@@ -1032,7 +1045,8 @@
     var patternCache = new Map();
     var stripCache = new Map();
     var best = null;
-    var deadline = Date.now() + TIME_BUDGET_MS;
+    var budget = options && Number(options.timeBudget) > 0 ? Number(options.timeBudget) : TIME_BUDGET_MS;
+    var deadline = Date.now() + budget;
     var timedOut = false;
 
     function stripPlan(stripL, stripD, reqCounts) {
@@ -1059,8 +1073,8 @@
         var y0 = plans[pi].y0;
         for (var k = 0; k < plan.placements.length; k++) {
           var pl = plan.placements[k];
-          var actualX = pl._effX + (P.gap ? P.gap / 2 : 0);
-          var actualY = y0 + pl._effY + (P.gap ? P.gap / 2 : 0);
+          var actualX = pl._effX;
+          var actualY = y0 + pl._effY;
           placements.push({
             typeId: pl.typeId,
             name: pl.name,
@@ -1076,6 +1090,7 @@
             baseH: pl.baseH,
             weight: pl.weight,
             rotated: pl.rotated,
+            gap: P.gap,
             count: 1,
             layers: 1,
             stackHeight: pl.h,
@@ -1187,7 +1202,7 @@
             x: windTpl[wi][0] + (L - 5898), y: windTpl[wi][1] + (W - 2352) / 2,
             z: 0, l: windTpl[wi][2], w: windTpl[wi][3], h: wt.h, baseH: wt.baseH,
             weight: wt.weight, rotated: windTpl[wi][2] === wt.w,
-            count: wc, stackHeight: wc * wt.h, strip: 'W', order: wi,
+            count: wc, stackHeight: wc * wt.h, strip: 'W', order: wi, gap: P.gap,
             baseL: windTpl[wi][2], baseW: windTpl[wi][3]
           });
           remainW -= wc;
@@ -1347,11 +1362,11 @@
     // 二次紧凑化：X 向柜底、Y 向左侧内壁，真实矩形碰撞检测。
     // 有叠放垛时，单层垛不再被拉回柜底——单层要留在柜门侧。
     var hasHighStack = best.placements.some(function (p) { return p.count > 1; });
-    compactPlacements(best.placements, L, W, hasHighStack);
+    compactPlacements(best.placements, packingL, W, hasHighStack);
     if (hasHighStack) {
       promoteSinglesToDoor(best.placements, L, W);
       // 换位后再次全量紧凑化：把换位产生的中间缝隙压掉，单层仍保持在高层之后。
-      compactPlacements(best.placements, L, W, false);
+      compactPlacements(best.placements, packingL, W, false);
     }
     var maxX = 0, minX = Infinity;
     best.placements.forEach(function (p) {
@@ -1359,6 +1374,15 @@
       minX = Math.min(minX, p.x);
     });
     if (!isFinite(minX)) minX = 0;
+    var overflow = maxX - packingL;
+    if (overflow > EPS) {
+      var shiftLeft = Math.min(minX, overflow);
+      if (shiftLeft > 0) {
+        best.placements.forEach(function (p) { p.x -= shiftLeft; });
+        maxX -= shiftLeft;
+        minX -= shiftLeft;
+      }
+    }
     var doorClearance = Math.max(0, L - maxX);
     var bottomGap = Math.max(0, minX);
     best.placements.forEach(function (p) {
@@ -1400,13 +1424,25 @@
     var usedArea = 0;
     var usedVolume = 0;
     var maxH = 0;
+    var cogW = 0, cogX = 0, cogY = 0;
     best.placements.forEach(function (p) {
       usedArea += p.baseL * p.baseW;
-      p.layers.forEach(function (layer) { usedVolume += layer.l * layer.w * layer.h; });
+      p.layers.forEach(function (layer) {
+        usedVolume += layer.l * layer.w * layer.h;
+        var lw = layer.weight || 0;
+        cogW += lw;
+        cogX += lw * (p.x + (layer.relX || 0) + layer.l / 2);
+        cogY += lw * (p.y + (layer.relY || 0) + layer.w / 2);
+      });
       maxH = Math.max(maxH, p.stackHeight || p.h);
     });
+    var cog = cogW > 0 ? { x: cogX / cogW, y: cogY / cogW } : null;
+    var cogOffset = cog ? {
+      xPct: (cog.x - L / 2) / L * 100,
+      yPct: (cog.y - W / 2) / W * 100
+    } : null;
 
-    var warnings = [];
+    var warnings = doorWarnings.slice();
     if (weightKnown && P.payload > 0 && totalWeight > P.payload) {
       warnings.push('总重 ' + Math.round(totalWeight).toLocaleString('zh-CN') + ' kg，超过箱型载重 ' + P.payload.toLocaleString('zh-CN') + ' kg，请减少货物或分柜。');
     }
@@ -1416,6 +1452,9 @@
     if (P.allowStack) {
       warnings.push('按叠放计算：上面托盘的长短边都不超过下方托盘时才允许叠放。');
     }
+    if (weightKnown && cogOffset && (Math.abs(cogOffset.xPct) > 5 || Math.abs(cogOffset.yPct) > 5)) {
+      warnings.push('估算重心偏离柜体中心：纵向 ' + cogOffset.xPct.toFixed(1) + '%，横向 ' + cogOffset.yPct.toFixed(1) + '%；请现场复核偏载。');
+    }
 
     best.placements.sort(function (a, b) { return a.order - b.order; });
     best.placements.forEach(function (p, idx) { p.seq = idx + 1; });
@@ -1423,31 +1462,50 @@
     // 装柜间隙复核：
     // 同一排（相同柜长起点）的托盘宽度之和 vs 柜内宽，剩余 < 80mm 报警；
     // 同一列（相同柜宽起点）的托盘长度之和 vs 柜内长，剩余 < 200mm 报警。
-    var widthGroups = Object.create(null);
-    var lengthGroups = Object.create(null);
-    best.placements.forEach(function (p) {
-      var xKey = Math.round(p.x);
-      var yKey = Math.round(p.y);
-      (widthGroups[xKey] = widthGroups[xKey] || []).push(p);
-      (lengthGroups[yKey] = lengthGroups[yKey] || []).push(p);
-    });
+    // 宽度间隙：按柜长方向做真实截面扫描，避免交错排布漏报。
+    var xEdges = [0, L];
+    best.placements.forEach(function (p) { xEdges.push(p.x, p.x + p.l); });
+    xEdges = xEdges.filter(function (v, i, a) { return v >= -EPS && v <= L + EPS && a.indexOf(v) === i; })
+      .sort(function (a, b) { return a - b; });
+    var widthSegs = [];
+    for (var xi = 0; xi < xEdges.length - 1; xi++) {
+      var xa = xEdges[xi], xb = xEdges[xi + 1];
+      if (xb - xa <= EPS) continue;
+      var mid = (xa + xb) / 2;
+      var usedW = 0, seqsW = [];
+      best.placements.forEach(function (p) {
+        if (p.x < mid && p.x + p.l > mid) { usedW += p.w; seqsW.push(p.seq); }
+      });
+      var leftW = W - usedW;
+      if (usedW > 0 && leftW < 80) {
+        widthSegs.push({ x0: xa, x1: xb, used: usedW, clearance: leftW, seqs: seqsW });
+      }
+    }
     var clearanceWarnings = [];
-    Object.keys(widthGroups).forEach(function (key) {
-      var arr = widthGroups[key];
-      var used = 0;
-      arr.forEach(function (p) { used += p.w; });
-      var left = W - used;
-      if (left < 80) {
+    for (var wi = 0; wi < widthSegs.length; wi++) {
+      var seg = widthSegs[wi];
+      if (wi > 0 && Math.abs(widthSegs[wi - 1].x1 - seg.x0) < 1 &&
+          Math.abs(widthSegs[wi - 1].clearance - seg.clearance) < 1) {
+        var prev = clearanceWarnings[clearanceWarnings.length - 1];
+        prev.x1 = seg.x1;
+        prev.seqs = prev.seqs.concat(seg.seqs).filter(function (v, i, a) { return a.indexOf(v) === i; });
+      } else {
         clearanceWarnings.push({
           axis: 'width',
-          at: Number(key),
-          used: used,
-          clearance: left,
+          at: seg.x0,
+          x1: seg.x1,
+          used: seg.used,
+          clearance: seg.clearance,
           threshold: 80,
-          seqs: arr.map(function (p) { return p.seq; }),
-          text: '同一排（柜长起点 ' + key + 'mm）托盘宽度合计 ' + Math.round(used) + 'mm，柜内宽 ' + W + 'mm，剩余 ' + Math.round(left) + 'mm（< 80mm）'
+          seqs: seg.seqs,
+          text: '柜长 ' + Math.round(seg.x0) + '–' + Math.round(seg.x1) + 'mm 截面：托盘宽度合计 ' + Math.round(seg.used) + 'mm，柜内宽 ' + W + 'mm，剩余 ' + Math.round(seg.clearance) + 'mm（< 80mm）'
         });
       }
+    }
+    var lengthGroups = Object.create(null);
+    best.placements.forEach(function (p) {
+      var yKey = Math.round(p.y);
+      (lengthGroups[yKey] = lengthGroups[yKey] || []).push(p);
     });
     Object.keys(lengthGroups).forEach(function (key) {
       var arr = lengthGroups[key];
@@ -1498,6 +1556,8 @@
       volumeUtil: L * W * H ? usedVolume / (L * W * H) : 0,
       totalWeight: totalWeight,
       weightKnown: weightKnown,
+      cog: cog,
+      cogOffset: cogOffset,
       payload: P.payload,
       maxHeight: maxH,
       gap: P.gap,
@@ -1536,38 +1596,147 @@
    */
   function solveLeastStacking(container, pallets, options) {
     var required = pallets.filter(function (p) { return !p.fill && Number(p.qty) > 0; });
-    if (required.length !== 1) return null;
-    var p = required[0];
+    if (!required.length) return null;
     var H = Math.round(Number(container.h) || 0);
-    var layers = options.allowStack === false ? 1 : Math.max(1, Math.floor(H / Math.round(Number(p.h) || 1)));
-    var qty = Math.round(Number(p.qty) || 0);
-    var minUnits = Math.ceil(qty / layers);
-    if (qty <= minUnits) return null;
 
-    var lo = minUnits + 1, hi = qty - 1, best = null, tries = 0;
-    while (lo <= hi && tries++ < 14) {
-      var mid = Math.floor((lo + hi) / 2);
-      var counts = {};
-      counts[String(p.id)] = mid;
+    // 多规格：用面积预算给一个“高地面垛位”目标，避免在 40HQ 上反复跑 DP。
+    if (required.length > 1) {
+      var floorA = (Math.round(Number(container.l) || 0) * Math.round(Number(container.w) || 0));
+      var counts2 = {};
+      var areas = [];
+      var sumArea = 0;
+      required.forEach(function (p) {
+        var id = String(p.id);
+        counts2[id] = Math.max(0, Math.round(Number(p.qty) || 0));
+        var a = Math.round(Number(p.l) || 0) * Math.round(Number(p.w) || 0);
+        areas.push({ id: id, a: a, t: p });
+        sumArea += a * counts2[id];
+      });
+      while (sumArea > floorA * 0.92) {
+        areas.sort(function (x, y) {
+          return (y.a * counts2[y.id]) - (x.a * counts2[x.id]);
+        });
+        var reduced = false;
+        for (var ri = 0; ri < areas.length; ri++) {
+          var it = areas[ri];
+          var minU = Math.ceil(Number(it.t.qty) / Math.max(1, Math.floor(H / Math.max(1, Number(it.t.h) || 1))));
+          if (counts2[it.id] > minU) {
+            counts2[it.id]--;
+            sumArea -= it.a;
+            reduced = true;
+            break;
+          }
+        }
+        if (!reduced) break;
+      }
+      var r2 = solveCore(container, pallets, Object.assign({}, options, {
+        allowStack: true, noMerge: true, timeBudget: 700, stackUnitCounts: counts2
+      }));
+      if (r2 && r2.ok) {
+        r2.stackingUsed = true;
+        r2.strategy = 'min-stack';
+        r2.allowStack = true;
+        return r2;
+      }
+      return null;
+    }
+
+    var starts = {};
+    var maxUnits = {};
+    var total = 0;
+    required.forEach(function (p) {
+      var qty = Math.round(Number(p.qty) || 0);
+      var layers = Math.max(1, Math.floor(H / Math.max(1, Math.round(Number(p.h) || 1))));
+      var min = Math.ceil(qty / layers);
+      starts[String(p.id)] = min;
+      maxUnits[String(p.id)] = qty;
+      total += min;
+    });
+    if (!required.length) return null;
+
+    function evaluateCounts(counts) {
       var opts = Object.assign({}, options, {
         allowStack: true,
         noMerge: true,
+        timeBudget: 180,
         stackUnitCounts: counts
       });
-      var r = solveCore(container, pallets, opts);
-      if (r && r.ok) {
-        best = r;
-        lo = mid + 1;
-      } else {
-        hi = mid - 1;
-      }
+      return solveCore(container, pallets, opts);
     }
+
+    var counts = Object.assign({}, starts);
+    var best = evaluateCounts(counts);
+    if (!best || !best.ok) return null;
+    var bestTotal = total;
+    var deadline = Date.now() + 1800;
+
+    // 多规格：从“最大叠放”开始逐规格增加地面垛位，取可行的最大地面垛位数。
+    for (var iter = 0; iter < 40 && Date.now() < deadline; iter++) {
+      var improved = false;
+      var candidateList = [];
+      required.forEach(function (p) {
+        var id = String(p.id);
+        if (counts[id] >= maxUnits[id]) return;
+        var c = Object.assign({}, counts);
+        c[id] += 1;
+        candidateList.push(c);
+      });
+      var chosen = null;
+      var chosenTotal = bestTotal;
+      var chosenCounts = null;
+      for (var ci = 0; ci < candidateList.length; ci++) {
+        if (Date.now() > deadline) break;
+        var r = evaluateCounts(candidateList[ci]);
+        if (!r || !r.ok) continue;
+        var sumUnits = 0;
+        Object.keys(candidateList[ci]).forEach(function (id) { sumUnits += candidateList[ci][id]; });
+        if (sumUnits > chosenTotal ||
+            (sumUnits === chosenTotal && r.fillCount > (chosen ? chosen.fillCount : -1))) {
+          chosen = r;
+          chosenTotal = sumUnits;
+          chosenCounts = candidateList[ci];
+        }
+      }
+      if (chosen) {
+        best = chosen;
+        counts = chosenCounts;
+        bestTotal = chosenTotal;
+        improved = true;
+      }
+      if (!improved) break;
+    }
+
     if (best) {
       best.stackingUsed = true;
       best.strategy = 'min-stack';
       best.allowStack = true;
     }
     return best;
+  }
+
+  function mergeSameSize(pallets) {
+    var out = [];
+    var map = {};
+    var groups = [];
+    pallets.forEach(function (p) {
+      var dup = null;
+      if (!p.fill) {
+        for (var i = 0; i < out.length; i++) {
+          var q = out[i];
+          if (!q.fill && q.l === p.l && q.w === p.w && q.h === p.h) { dup = q; break; }
+        }
+      }
+      if (dup) {
+        dup.qty = (Number(dup.qty) || 0) + (Number(p.qty) || 0);
+        map[String(p.id)] = String(dup.id);
+        var g = groups.filter(function (x) { return x.into === String(dup.id); })[0];
+        if (!g) { g = { into: String(dup.id), from: [String(dup.id)] }; groups.push(g); }
+        g.from.push(String(p.id));
+      } else {
+        out.push(Object.assign({}, p));
+      }
+    });
+    return { pallets: out, map: map, groups: groups };
   }
 
   /*
@@ -1578,40 +1747,56 @@
    */
   function solve(container, pallets, options) {
     var base = Object.assign({}, options || {});
-    var singleOpts = Object.assign({}, base, { allowStack: false });
-
-    if (base.allowStack === false) {
-      var onlySingle = solveCore(container, pallets, singleOpts);
-      if (onlySingle) { onlySingle.stackingUsed = false; onlySingle.strategy = 'single'; }
-      return onlySingle;
+    var singleOpts = Object.assign({}, base, { allowStack: false, allowFillStack: base.allowStack !== false });
+    var merged = mergeSameSize(pallets);
+    var work = merged.pallets;
+    function stamp(res) {
+      if (res) {
+        res.mergedMap = merged.map;
+        res.mergedGroups = merged.groups;
+      }
+      return res;
     }
 
-    var single = solveCore(container, pallets, singleOpts);
+    if (base.allowStack === false) {
+      var onlySingle = solveCore(container, work, singleOpts);
+      if (onlySingle) { onlySingle.stackingUsed = false; onlySingle.strategy = 'single'; }
+      return stamp(onlySingle);
+    }
+
+    var single = solveCore(container, work, singleOpts);
+    var hasFill = work.some(function (p) { return p.fill; });
+    if (base.preferSingle === false && !hasFill && single && single.ok) {
+      single.stackingUsed = false;
+      single.strategy = 'single-no-fill';
+      single.allowStack = true;
+      return stamp(single);
+    }
     if (base.preferSingle !== false) {
       if (single && single.ok) {
         single.stackingUsed = false;
         single.strategy = 'single-preferred';
         single.allowStack = true;
-        return single;
+        return stamp(single);
       }
-      var least = solveLeastStacking(container, pallets, base);
-      if (least && least.ok) return least;
+      var least = solveLeastStacking(container, work, base);
+      if (least && least.ok) return stamp(least);
     }
 
     // 叠放优先：先尝试最大叠放；叠放放不下再退回单层。
-    var stacked = solveCore(container, pallets, base);
+    var stacked = solveCore(container, work, base);
     if (stacked && stacked.ok) {
       stacked.stackingUsed = true;
       stacked.strategy = 'stacked-preferred';
-      return stacked;
+      return stamp(stacked);
     }
     if (single && single.ok) {
       single.stackingUsed = false;
       single.strategy = 'single-fallback';
       single.allowStack = true;
-      return single;
+      return stamp(single);
     }
-    return stacked || single;
+    return stamp(stacked || single);
   }
 
   var API = {
@@ -1627,6 +1812,10 @@
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   root.CL_SOLVER = API;
 })(typeof window !== 'undefined' ? window : globalThis);
+
+
+
+
 
 
 

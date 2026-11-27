@@ -117,12 +117,14 @@
   Scene.prototype._canPlace = function (p, x, y, l, w) {
     var m = this.model;
     if (!m) return false;
-    if (x < -1e-6 || y < -1e-6 || x + l > m.L + 1e-6 || y + w > m.W + 1e-6) return false;
+    var maxX = m.packingL == null ? m.L : m.packingL;
+    if (x < -1e-6 || y < -1e-6 || x + l > maxX + 1e-6 || y + w > m.W + 1e-6) return false;
     for (var i = 0; i < (m.placements || []).length; i++) {
       var q = m.placements[i];
       if (q === p) continue;
-      if (x < q.x + q.l - 1e-6 && q.x < x + l - 1e-6 &&
-          y < q.y + q.w - 1e-6 && q.y < y + w - 1e-6) return false;
+      var qg = q.gap || 0;
+      if (x < q.x + q.l + qg - 1e-6 && q.x < x + l + (p.gap || 0) - 1e-6 &&
+          y < q.y + q.w + qg - 1e-6 && q.y < y + w + (p.gap || 0) - 1e-6) return false;
     }
     return true;
   };
@@ -132,7 +134,8 @@
     var m = this.model;
     if (!m) return { x: rawX, y: rawY, snapped: false };
     var SNAP = 28;
-    var xs = [0, m.L - p.l];
+    var maxX = m.packingL == null ? m.L : m.packingL;
+    var xs = [0, maxX - p.l];
     var ys = [0, m.W - p.w];
     var yOverlap = function (y0, w, q) {
       return y0 < q.y + q.w - 1e-6 && q.y < y0 + w - 1e-6;
@@ -143,10 +146,10 @@
     (m.placements || []).forEach(function (q) {
       if (q === p) return;
       if (yOverlap(rawY, p.w, q)) {
-        xs.push(q.x, q.x + q.l, q.x - p.l, q.x + q.l - p.l);
+        xs.push(q.x, q.x + q.l + (q.gap || 0), q.x - p.l - (p.gap || 0), q.x + q.l - p.l);
       }
       if (xOverlap(rawX, p.l, q)) {
-        ys.push(q.y, q.y + q.w, q.y - p.w, q.y + q.w - p.w);
+        ys.push(q.y, q.y + q.w + (q.gap || 0), q.y - p.w - (p.gap || 0), q.y + q.w - p.w);
       }
     });
     function nearest(v, arr, min, max) {
@@ -158,7 +161,7 @@
       });
       return best;
     }
-    var sx = nearest(rawX, xs, 0, m.L - p.l);
+    var sx = nearest(rawX, xs, 0, maxX - p.l);
     var sy = nearest(rawY, ys, 0, m.W - p.w);
     var snappedX = Math.abs(sx - rawX) > 1e-6;
     var snappedY = Math.abs(sy - rawY) > 1e-6;
@@ -199,16 +202,17 @@
     var m = this.model;
     if (!m) return null;
     var ocx = p.x + p.l / 2, ocy = p.y + p.w / 2;
-    var xs = [p.x, ocx - nl / 2, 0, m.L - nl];
+    var maxX = m.packingL == null ? m.L : m.packingL;
+    var xs = [p.x, ocx - nl / 2, 0, maxX - nl];
     var ys = [p.y, ocy - nw / 2, 0, m.W - nw];
     (m.placements || []).forEach(function (q) {
       if (q === p) return;
-      xs.push(q.x, q.x + q.l, q.x - nl, q.x + q.l - nl);
-      ys.push(q.y, q.y + q.w, q.y - nw, q.y + q.w - nw);
+      xs.push(q.x, q.x + q.l + (q.gap || 0), q.x - nl - (p.gap || 0), q.x + q.l - nl);
+      ys.push(q.y, q.y + q.w + (q.gap || 0), q.y - nw - (p.gap || 0), q.y + q.w - nw);
     });
     var best = null;
     xs.forEach(function (x) {
-      if (x < -1e-6 || x + nl > m.L + 1e-6) return;
+      if (x < -1e-6 || x + nl > maxX + 1e-6) return;
       ys.forEach(function (y) {
         if (y < -1e-6 || y + nw > m.W + 1e-6) return;
         if (!this._canPlace(p, x, y, nl, nw)) return;
@@ -237,19 +241,19 @@
       nx = 0;
       (m.placements || []).forEach(function (q) {
         if (q === p || !yHit(q)) return;
-        if (q.x + q.l <= p.x + 1e-6) nx = Math.max(nx, q.x + q.l);
+        if (q.x + q.l + (q.gap || 0) <= p.x + 1e-6) nx = Math.max(nx, q.x + q.l + (q.gap || 0));
       });
     } else if (dir === 'left') {
       ny = 0;
       (m.placements || []).forEach(function (q) {
         if (q === p || !xHit(q)) return;
-        if (q.y + q.w <= p.y + 1e-6) ny = Math.max(ny, q.y + q.w);
+        if (q.y + q.w + (q.gap || 0) <= p.y + 1e-6) ny = Math.max(ny, q.y + q.w + (q.gap || 0));
       });
     } else if (dir === 'right') {
       ny = m.W - p.w;
       (m.placements || []).forEach(function (q) {
         if (q === p || !xHit(q)) return;
-        if (q.y >= p.y + p.w - 1e-6) ny = Math.min(ny, q.y - p.w);
+        if (q.y >= p.y + p.w - 1e-6) ny = Math.min(ny, q.y - p.w - (q.gap || 0));
       });
     } else {
       return false;

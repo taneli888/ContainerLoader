@@ -522,7 +522,9 @@
       l: state.container.l,
       w: state.container.w,
       h: state.container.h,
-      payload: state.container.payload
+      payload: state.container.payload,
+      doorW: known ? known.doorW : (state.container.doorW || 0),
+      doorH: known ? known.doorH : (state.container.doorH || 0)
     };
   }
 
@@ -635,6 +637,8 @@
     var placements = res && res.ok ? res.placements : [];
     scene.setModel({
       L: c.l, W: c.w, H: c.h,
+      doorGap: state.options.doorGap || 0,
+      packingL: Math.max(0, c.l - (state.options.doorGap || 0)),
       placements: placements
     });
     updateLayerToggle(res);
@@ -808,6 +812,9 @@
       $('#resultTypes').hidden = true;
       $('#resultNotes').hidden = true;
       $('#resultActions').hidden = true;
+      $('#typeList').innerHTML = '';
+      $('#layoutNotes').innerHTML = '';
+      $('#stageLegend').innerHTML = '';
       return;
     }
 
@@ -860,6 +867,7 @@
     var counts = res.typeCounts || {};
     var rows = [];
     state.pallets.forEach(function (p) {
+      if (res.mergedMap && res.mergedMap[p.id] && res.mergedMap[p.id] !== p.id) return;
       var count = counts[p.id] || 0;
       if (!count) return;
       var c = colorFor(p.color);
@@ -885,11 +893,18 @@
     var c = currentContainer();
     if (!res || !res.ok) { $('#layoutNotes').innerHTML = ''; return; }
     var notes = [];
-    if (!res.stackingUsed && res.allowStack) {
+    if (res.strategy === 'single-no-fill') {
+      notes.push('没有补柜规格时，叠放不会增加总托数；已按<strong>单层</strong>排布，避免无意义地全叠。');
+    }
+    if (!res.stackingUsed && res.allowStack && res.strategy !== 'single-no-fill') {
       notes.push('单层已经能装下全部必装，按<strong>优先不叠放</strong>采用单层方案；如需用叠放换更多补柜，可取消“优先不叠放”。');
     }
     if (res.strategy === 'min-stack') {
       notes.push('按<strong>不叠放优先</strong>：先把能平放的托盘全部平放，只叠最少的组数；不会为了减少垛位而把整票货都叠起来。');
+    }
+    if (res.mergedGroups && res.mergedGroups.length) {
+      var mergedCount = res.mergedGroups.reduce(function (n, g) { return n + Math.max(0, g.from.length - 1); }, 0);
+      notes.push('有 <strong>' + mergedCount + ' 行同尺寸托盘已自动合并计算</strong>，结果中合并显示。');
     }
     if (res.manual) {
       notes.push('当前方案包含<strong>手动拖动/旋转</strong>后的托盘坐标；自动间隙报警仍按系统初始排布计算，现场请再复核。');
@@ -943,7 +958,7 @@
       });
       if (parts.length) notes.push('本次采用上下两条长条分区：<strong>' + parts.join('；') + '</strong>。同规格集中放置，便于叉车从柜门顺序推进。');
     }
-    if (res.gap > 0) notes.push('计算时每个托盘四周已预留 <strong>' + res.gap + ' mm</strong> 间隙。');
+    if (res.gap > 0) notes.push('计算时相邻托盘之间已预留 <strong>' + res.gap + ' mm</strong> 间隙（托盘与柜壁之间不额外加）。');
     if (res.timedOut) notes.push('规格较多，已在约 1.2 秒内返回当前最佳方案；如需更充分搜索，可减少规格或数量后重算。');
     (res.warnings || []).forEach(function (w) {
       if (res.allowStack && w.indexOf('按同规格垂直叠放计算') === 0) return;
