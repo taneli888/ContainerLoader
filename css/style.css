@@ -1526,15 +1526,15 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 
 .print-bottom {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 2.2mm;
+  display: block;
   width: 100%;
+  clear: both;
 }
 
 .print-clearance {
+  display: block;
   width: 100%;
+  margin-bottom: 2mm;
   padding: 1.8mm 2.6mm;
   border: .35mm solid #e5a99c;
   border-radius: 1.5mm;
@@ -1560,7 +1560,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .print-clearance li { color: #c82315; }
 
 .print-table {
+  display: block;
   width: 100%;
+  margin-bottom: 2mm;
   border: .3mm solid #cbbba6;
   border-radius: 1.5mm;
   overflow: hidden;
@@ -1592,11 +1594,11 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .print-table td.num, .print-table th.num { text-align: right; }
 
 .print-foot {
-  width: 100%;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
   gap: 4mm;
+  width: 100%;
   padding: 1.8mm 2.6mm;
   border: .3mm solid #e2d8c9;
   border-radius: 1.5mm;
@@ -1604,6 +1606,8 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   color: #333;
   font-size: 8pt;
   line-height: 1.45;
+  page-break-inside: avoid;
+  break-inside: avoid;
 }
 .print-foot b { color: #111; }
 .print-sign {
@@ -1763,16 +1767,16 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
   /* 下方文字与表格区 */
   .print-bottom {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 2.2mm;
+    display: block !important;
     width: 100% !important;
+    clear: both !important;
   }
 
   /* 间隙报警 */
   .print-clearance {
+    display: block !important;
     width: 100% !important;
+    margin-bottom: 2mm !important;
     padding: 1.8mm 2.6mm;
     border: .35mm solid #e5a99c;
     border-radius: 1.5mm;
@@ -1799,7 +1803,9 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 
   /* 装载明细表 */
   .print-table {
+    display: block !important;
     width: 100% !important;
+    margin-bottom: 2mm !important;
     border: .3mm solid #cbbba6;
     border-radius: 1.5mm;
     overflow: hidden;

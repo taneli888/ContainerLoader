@@ -1041,14 +1041,14 @@
   }
 
   function ensureHtml2Pdf(cb) {
-    if (window.html2pdf) {
-      cb(null, window.html2pdf);
+    if (window.html2pdf && (window.html2canvas || (window.jspdf && window.jspdf.jsPDF) || window.jsPDF)) {
+      cb(null);
       return;
     }
     var script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
     script.onload = function () {
-      if (window.html2pdf) cb(null, window.html2pdf);
+      if (window.html2pdf) cb(null);
       else cb(new Error('PDF 组件初始化失败'));
     };
     script.onerror = function () {
@@ -1070,7 +1070,7 @@
         });
         return;
       }
-    } catch (e) { /* fallback to anchor download */ }
+    } catch (e) { /* fallback */ }
     triggerDownloadBlob(blob, filename);
   }
 
@@ -1087,6 +1087,46 @@
     }, 2000);
   }
 
+  function rasterizeSvgElements(rootEl, cb) {
+    var svgs = Array.prototype.slice.call(rootEl.querySelectorAll('svg'));
+    if (!svgs.length) { cb(); return; }
+    var done = 0;
+    svgs.forEach(function (svg) {
+      var vb = (svg.getAttribute('viewBox') || '0 0 820 300').split(/\s+/).map(Number);
+      var vw = vb[2] || 820;
+      var vh = vb[3] || 300;
+      var scale = 2.5;
+      var xml = new XMLSerializer().serializeToString(svg);
+      if (xml.indexOf('xmlns=') === -1) {
+        xml = xml.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+      }
+      var svgUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(xml);
+      var img = new Image();
+      img.onload = function () {
+        var c = document.createElement('canvas');
+        c.width = Math.round(vw * scale);
+        c.height = Math.round(vh * scale);
+        var ctx = c.getContext('2d');
+        ctx.fillStyle = '#fffdf9';
+        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.drawImage(img, 0, 0, c.width, c.height);
+        var pngImg = document.createElement('img');
+        pngImg.src = c.toDataURL('image/png');
+        pngImg.style.width = '100%';
+        pngImg.style.height = 'auto';
+        pngImg.style.display = 'block';
+        if (svg.parentNode) svg.parentNode.replaceChild(pngImg, svg);
+        done++;
+        if (done === svgs.length) cb();
+      };
+      img.onerror = function () {
+        done++;
+        if (done === svgs.length) cb();
+      };
+      img.src = svgUrl;
+    });
+  }
+
   function savePdfNow() {
     if (!state.layout || !state.layout.ok) {
       toast('当前没有可导出的装载方案');
@@ -1101,10 +1141,10 @@
     var btns = [$('#btnSavePdf'), $('#btnSavePdfTop')].filter(Boolean);
     btns.forEach(function (b) { b.disabled = true; });
 
-    ensureHtml2Pdf(function (err, html2pdfFn) {
+    ensureHtml2Pdf(function (err) {
       if (err) {
         btns.forEach(function (b) { b.disabled = false; });
-        toast(err.message + '，可尝试使用 Safari 分享 → 打印 → 存为 PDF');
+        toast(err.message);
         return;
       }
 
@@ -1116,12 +1156,29 @@
         return;
       }
 
-      // 在视口左上角放置固定 794px (A4 宽度比例) 不可见离屏层，避免 iOS 视口窄导致的重排与滚动偏移截断
-      var host = document.createElement('div');
-      host.className = 'pdf-export-host';
-      var clone = srcSheet.cloneNode(true);
-      host.appendChild(clone);
-      document.body.appendChild(host);
+      // 使用独立 iframe 锁定 560px 桌面版心宽度，彻底隔离手机端窄屏视口与缩放影响
+      var iframe = document.createElement('iframe');
+      iframe.setAttribute('aria-hidden', 'true');
+      iframe.style.cssText = 'position:fixed;left:0;top:0;width:560px;height:1200px;border:0;opacity:0;pointer-events:none;z-index:-999;';
+      document.body.appendChild(iframe);
+
+      var idoc = iframe.contentDocument || iframe.contentWindow.document;
+      var baseHref = document.baseURI || window.location.href;
+      var styleTags = Array.prototype.slice.call(document.querySelectorAll('link[rel="stylesheet"], style'))
+        .map(function (el) {
+          if (el.tagName === 'LINK' && el.href) {
+            return '<link rel="stylesheet" href="' + el.href + '">';
+          }
+          return el.outerHTML;
+        }).join('\n');
+
+      idoc.open();
+      idoc.write('<!doctype html><html><head><meta charset="utf-8"><base href="' + baseHref + '">' + styleTags +
+        '<style>html,body{margin:0!important;padding:0!important;width:560px!important;min-width:560px!important;max-width:560px!important;background:#fff!important;overflow:visible!important;}' +
+        '.print-root{display:block!important;width:560px!important;max-width:560px!important;margin:0!important;padding:0!important;}' +
+        '.print-sheet{width:560px!important;max-width:560px!important;margin:0!important;padding:0!important;background:#fff!important;}</style>' +
+        '</head><body><div class="print-root">' + srcSheet.outerHTML + '</div></body></html>');
+      idoc.close();
 
       var c = currentContainer();
       var code = (c && c.code ? c.code : 'Container').replace(/[^a-zA-Z0-9_-]/g, '');
@@ -1131,46 +1188,68 @@
         String(d.getDate()).padStart(2, '0');
       var filename = 'Container-Loader-' + code + '-' + ymd + '.pdf';
 
-      setTimeout(function () {
-        var opt = {
-          margin: 0,
-          filename: filename,
-          image: { type: 'jpeg', quality: 0.96 },
-          html2canvas: {
-            scale: 2,
-            useCORS: true,
-            backgroundColor: '#ffffff',
-            scrollX: 0,
-            scrollY: 0,
-            windowWidth: 900,
-            logging: false
-          },
-          jsPDF: {
-            unit: 'mm',
-            format: 'a4',
-            orientation: 'portrait'
-          }
-        };
+      var targetEl = idoc.querySelector('.print-sheet');
+      rasterizeSvgElements(targetEl, function () {
+        setTimeout(function () {
+          var contentW = 560;
+          var contentH = Math.ceil(targetEl.scrollHeight || targetEl.getBoundingClientRect().height || 780);
+          iframe.style.height = (contentH + 20) + 'px';
 
-        // 先用 html2pdf 生成高清 canvas，再按单页 A4 精确等比排版，彻底杜绝自动分页切成 3 页
-        html2pdfFn().set(opt).from(clone).toCanvas().get('canvas').then(function (canvas) {
-          return html2pdfFn().set(opt).from(clone).toPdf().get('pdf').then(function (pdf) {
+          var captureFn = window.html2canvas
+            ? window.html2canvas(targetEl, {
+                scale: 2,
+                useCORS: true,
+                backgroundColor: '#ffffff',
+                width: contentW,
+                height: contentH,
+                windowWidth: contentW,
+                windowHeight: contentH,
+                scrollX: 0,
+                scrollY: 0,
+                logging: false
+              })
+            : window.html2pdf().set({
+                html2canvas: {
+                  scale: 2,
+                  useCORS: true,
+                  backgroundColor: '#ffffff',
+                  width: contentW,
+                  height: contentH,
+                  windowWidth: contentW,
+                  windowHeight: contentH,
+                  scrollX: 0,
+                  scrollY: 0,
+                  logging: false
+                }
+              }).from(targetEl).toCanvas().get('canvas');
+
+          captureFn.then(function (canvas) {
+            var JsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+            if (!JsPDFCtor) {
+              throw new Error('jsPDF constructor unavailable');
+            }
+            var pdf = new JsPDFCtor({
+              orientation: 'portrait',
+              unit: 'mm',
+              format: 'a4'
+            });
+
             var pageW = 210;
             var pageH = 297;
             var marginTop = 25.4;
-            var marginBottom = 16.0;
+            var marginBottom = 18.0;
             var marginLR = 31.7;
 
-            var maxW = pageW - marginLR * 2;       // 146.6 mm
-            var maxH = pageH - marginTop - marginBottom; // 255.6 mm
+            var maxW = pageW - marginLR * 2;          // 146.6 mm
+            var maxH = pageH - marginTop - marginBottom; // 253.6 mm
 
-            var imgRatio = canvas.height / canvas.width;
+            var ratio = canvas.height / canvas.width;
             var renderW = maxW;
-            var renderH = renderW * imgRatio;
+            var renderH = renderW * ratio;
 
             if (renderH > maxH) {
               renderH = maxH;
-              renderW = renderH / imgRatio;
+              renderW = renderH / ratio;
             }
             var offsetX = (pageW - renderW) / 2;
             var offsetY = marginTop;
@@ -1179,18 +1258,18 @@
             pdf.addImage(imgData, 'JPEG', offsetX, offsetY, renderW, renderH, undefined, 'FAST');
 
             var blob = pdf.output('blob');
-            if (host.parentNode) host.parentNode.removeChild(host);
+            if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
             btns.forEach(function (b) { b.disabled = false; });
             deliverPdfBlob(blob, filename);
             toast('单页 A4 PDF 已生成');
+          }).catch(function (e) {
+            if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+            btns.forEach(function (b) { b.disabled = false; });
+            console.error(e);
+            toast('PDF 生成失败，请尝试在 Safari 菜单中选择「分享 → 打印 → 存为 PDF」');
           });
-        }).catch(function (e) {
-          if (host.parentNode) host.parentNode.removeChild(host);
-          btns.forEach(function (b) { b.disabled = false; });
-          console.error(e);
-          toast('PDF 生成失败，请尝试在 Safari 菜单中选择「分享 → 打印 → 存为 PDF」');
-        });
-      }, 150);
+        }, 120);
+      });
     });
   }
 
