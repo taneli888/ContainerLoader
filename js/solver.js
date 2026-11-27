@@ -138,10 +138,19 @@
     if (!lp) return null;
     var out = [];
     function copy(src, p) {
-      return Object.assign({}, src, {
+      var out = Object.assign({}, src, {
         x: p.x, y: p.y, l: p.l, w: p.w, rotated: p.rotated,
         gap: gap, baseL: p.l, baseW: p.w
       });
+      if (out.layers) {
+        out.layers = out.layers.map(function (ly) {
+          if (ly.l === src.l && ly.w === src.w) {
+            return Object.assign({}, ly, { l: p.l, w: p.w, rotated: p.rotated });
+          }
+          return ly;
+        });
+      }
+      return out;
     }
     hp.forEach(function (p) { out.push(copy(p.src, p)); });
     lp.forEach(function (p) { out.push(copy(p.src, p)); });

@@ -76,7 +76,7 @@ const SCEN = [
   }
 
   await page.evaluate(() => { window.__CL_DEBUG.setMobileTab('view'); });
-  await new Promise(r => setTimeout(r, 500));
+  await new Promise(r => setTimeout(r, 1200));
   await page.screenshot({ path: path.join(__dirname, 'browser-last.png') });
   console.log('JS 报错汇总：' + (errors.length ? '\n  ' + errors.join('\n  ') : '无'));
   await browser.close();
