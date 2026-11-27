@@ -434,6 +434,45 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 }
 .pallet-code-row input:focus { border-color: var(--accent); }
 .pallet-code-row em { flex: 0 0 auto; font-style: normal; font-size: 9px; color: var(--faint); }
+.pallet-opts-row {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.pallet-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fffdf9;
+}
+.pallet-check input { margin: 0; accent-color: var(--accent); cursor: pointer; }
+.pallet-mini-num {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--faint);
+}
+.pallet-mini-num input {
+  width: 46px;
+  height: 24px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fffdf9;
+  font-size: 11.5px;
+  text-align: center;
+  color: var(--ink);
+}
+.pallet-mini-num input:focus { border-color: var(--accent); }
 .pallet-foot {
   margin-top: 7px;
   display: flex;
@@ -1286,6 +1325,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   padding: 11px 18px 15px;
   border-top: 1px solid var(--line);
 }
+.toast {
   position: fixed;
   left: 50%;
   bottom: 28px;
@@ -1315,6 +1355,7 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
     grid-template-columns: 334px minmax(420px, 1fr);
     height: auto;
     min-height: 0;
+  }
   .stage-panel {
     align-self: start;
     height: calc(100vh - 96px);
@@ -1405,109 +1446,218 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
 .print-root { display: none; }
 
 @media print {
-  @page { size: A4 landscape; margin: 8mm; }
+  @page {
+    size: A4 portrait;
+    margin: 25.4mm 31.7mm 20mm 31.7mm;
+  }
   html, body {
-    width: auto;
-    height: auto;
-    min-height: 0;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
     background: #fff !important;
     color: #111;
+    font-size: 9.5pt !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  body > *:not(.print-root) { display: none !important; }
+  .topbar, .workspace, .input-panel, .stage-panel, .result-panel,
+  .tabbar, .modal, .toast, header.topbar, main.workspace, nav, canvas {
+    display: none !important;
+    visibility: hidden !important;
+    width: 0 !important;
+    height: 0 !important;
+    overflow: hidden !important;
+  }
+  body > *:not(.print-root) {
+    display: none !important;
+  }
   .print-root {
     display: block !important;
-    width: 100%;
+    visibility: visible !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
   }
   .print-sheet {
-    width: 100%;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
     color: #111;
     font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   }
   .print-sheet * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .print-sheet h1, .print-sheet h2, .print-sheet p { margin: 0; }
+
+  /* 顶部标题栏 */
   .print-head {
-    display: flex;
-    align-items: flex-end;
+    display: flex !important;
+    align-items: center;
     justify-content: space-between;
-    border-bottom: 1.5px solid #1d272c;
-    padding-bottom: 3mm;
-    margin-bottom: 3mm;
+    gap: 3mm;
+    width: 100%;
+    border-bottom: 1.2pt solid #1d272c;
+    padding-bottom: 2mm;
+    margin-bottom: 2mm;
   }
-  .print-brand { display: flex; align-items: center; gap: 3mm; }
+  .print-brand { display: flex; align-items: center; gap: 2.5mm; }
   .print-logo {
-    width: 10mm; height: 10mm;
-    border-radius: 2.5mm;
+    width: 8.5mm; height: 8.5mm;
+    border-radius: 1.6mm;
     background: #c2733c;
     color: #fff;
     display: grid;
     place-items: center;
-    font-size: 5mm;
+    font-size: 11pt;
     font-weight: 800;
+    flex: 0 0 auto;
   }
-  .print-brand h1 { font-size: 5.2mm; letter-spacing: -.2px; }
-  .print-brand p { font-size: 2.6mm; color: #666; margin-top: .6mm; }
-  .print-meta { text-align: right; font-size: 2.4mm; color: #666; line-height: 1.5; }
-  .print-meta b { color: #111; font-size: 3mm; }
-  .print-summary {
-    display: grid;
-    grid-template-columns: 1.4fr 1fr 1fr 1fr 1fr;
-    gap: 2mm;
-    margin-bottom: 2.5mm;
-  }
-  .print-summary.no-fill { grid-template-columns: 1.4fr 1fr 1fr 1fr; }
-  .print-stat {
-    border: .3mm solid #d9cebe;
-    border-radius: 2mm;
-    padding: 2mm 2.4mm;
+  .print-brand h1 { font-size: 11pt; letter-spacing: -.2px; line-height: 1.2; color: #111; }
+  .print-brand p { font-size: 7.5pt; color: #555; margin-top: .5mm; }
+  .print-meta { text-align: right; font-size: 7.5pt; color: #444; line-height: 1.4; }
+  .print-meta b { color: #111; font-size: 8.5pt; }
+
+  /* 关键指标条 */
+  .print-kpi-bar {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 1mm 3mm;
+    width: 100%;
     background: #fbf7f0;
-  }
-  .print-stat.hot { background: #17242b; border-color: #17242b; color: #fff; }
-  .print-stat span { display: block; font-size: 2.2mm; color: #777; }
-  .print-stat.hot span { color: rgba(255, 255, 255, .62); }
-  .print-stat b { display: block; font-size: 6.4mm; font-weight: 600; margin-top: .5mm; line-height: 1; }
-  .print-stat.hot b { color: #f3cba4; font-size: 8mm; }
-  .print-stat small { font-size: 2.2mm; color: #666; margin-left: .6mm; }
-  .print-plan {
     border: .3mm solid #d9cebe;
-    border-radius: 2mm;
+    border-radius: 1.5mm;
+    padding: 1.5mm 2.6mm;
+    margin-bottom: 2.2mm;
+    font-size: 8.5pt;
+    color: #333;
+  }
+  .print-kpi-bar b { color: #17242b; font-size: 9pt; }
+
+  /* 三视图容器：在左右 3.17cm 边距之间 100% 满宽放大展示 */
+  .print-views {
+    display: block !important;
+    width: 100% !important;
+    margin: 0 0 2.5mm 0 !important;
+    padding: 0 !important;
+  }
+  .print-view-box {
+    display: block !important;
+    width: 100% !important;
+    margin-bottom: 1.6mm;
+    border: .3mm solid #d9cebe;
+    border-radius: 1.5mm;
     overflow: hidden;
-    margin-bottom: 2.5mm;
     background: #fff;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
-  .print-plan svg { width: 100%; height: 82mm; display: block; }
+  .print-view-box:last-child {
+    margin-bottom: 0;
+  }
+  .print-top-box svg,
+  .print-side-box svg {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    display: block !important;
+  }
+
+  /* 下方文字与表格区 */
   .print-bottom {
-    display: grid;
-    grid-template-columns: 1.35fr 1fr;
-    gap: 3mm;
-    align-items: start;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2.2mm;
+    width: 100% !important;
   }
-  .print-side {
-    border: .3mm solid #d9cebe;
-    border-radius: 2mm;
+
+  /* 间隙报警 */
+  .print-clearance {
+    width: 100% !important;
+    padding: 1.8mm 2.6mm;
+    border: .35mm solid #e5a99c;
+    border-radius: 1.5mm;
+    background: #fff6f4;
+    color: #c82315 !important;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .print-clearance-title {
+    font-size: 8.8pt;
+    font-weight: 700;
+    color: #c82315 !important;
+    margin-bottom: .5mm;
+  }
+  .print-clearance ul {
+    margin: 0;
+    padding-left: 4mm;
+    font-size: 8.2pt;
+    font-weight: 600;
+    line-height: 1.4;
+    color: #c82315 !important;
+  }
+  .print-clearance li { color: #c82315 !important; }
+
+  /* 装载明细表 */
+  .print-table {
+    width: 100% !important;
+    border: .3mm solid #cbbba6;
+    border-radius: 1.5mm;
     overflow: hidden;
+    page-break-inside: avoid;
+    break-inside: avoid;
   }
-  .print-side svg { width: 100%; height: 48mm; display: block; }
-  .print-table h2, .print-legend h2 { font-size: 2.7mm; margin-bottom: 1.2mm; letter-spacing: .2px; }
-  .print-table table { width: 100%; border-collapse: collapse; font-size: 2.3mm; }
-  .print-table th { text-align: left; color: #666; font-weight: 500; padding: 1mm 1.2mm; border-bottom: .25mm solid #ccc; }
-  .print-table td { padding: 1.1mm 1.2mm; border-bottom: .2mm solid #e8e0d3; }
+  .print-table table {
+    width: 100% !important;
+    border-collapse: collapse;
+    font-size: 8.8pt;
+  }
+  .print-table th {
+    text-align: left;
+    color: #222;
+    font-weight: 700;
+    padding: 1.6mm 2.4mm;
+    border-bottom: .35mm solid #cbbba6;
+    background: #faf6ef;
+    font-size: 8.2pt;
+    white-space: nowrap;
+  }
+  .print-table td {
+    padding: 1.6mm 2.4mm;
+    border-bottom: .2mm solid #ece4d8;
+    line-height: 1.38;
+    white-space: nowrap;
+  }
+  .print-table tbody tr:last-child td { border-bottom: 0; }
   .print-table td.num, .print-table th.num { text-align: right; }
-  .print-legend { display: flex; flex-wrap: wrap; gap: 2mm 3mm; margin-top: 1.5mm; font-size: 2.3mm; color: #555; }
-  .print-legend span { display: inline-flex; align-items: center; gap: 1mm; }
-  .print-legend i { width: 2.6mm; height: 2.6mm; border-radius: .6mm; display: inline-block; }
+
+  /* 底部说明区域 */
   .print-foot {
+    width: 100% !important;
     display: flex;
     justify-content: space-between;
-    gap: 3mm;
-    margin-top: 2.5mm;
-    padding-top: 1.6mm;
-    border-top: .25mm solid #d9cebe;
-    color: #777;
-    font-size: 2.1mm;
-    line-height: 1.4;
+    align-items: flex-end;
+    gap: 4mm;
+    padding: 1.8mm 2.6mm;
+    border: .3mm solid #e2d8c9;
+    border-radius: 1.5mm;
+    background: #fcfaf6;
+    color: #333;
+    font-size: 8pt;
+    line-height: 1.45;
   }
   .print-foot b { color: #111; }
+  .print-sign {
+    white-space: nowrap;
+    color: #758084;
+    font-size: 7.5pt;
+    font-weight: 600;
+  }
 }
-

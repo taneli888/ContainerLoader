@@ -1053,7 +1053,8 @@
         var pl = self._drag.placement;
         var nx = Math.round((self._drag.startFloor.x + (fp.x - self._drag.startFloor.x)) / 10) * 10;
         var ny = Math.round((self._drag.startFloor.y + (fp.y - self._drag.startFloor.y)) / 10) * 10;
-        nx = clamp(nx, 0, self.model.L - pl.l);
+        var maxDragX = self.model.packingL == null ? self.model.L : self.model.packingL;
+        nx = clamp(nx, 0, maxDragX - pl.l);
         ny = clamp(ny, 0, self.model.W - pl.w);
         var sp = self._snapPosition(pl, nx, ny);
         nx = sp.x;

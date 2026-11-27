@@ -29,23 +29,23 @@
     },
     {
       id: '20RF', code: '20RF', name: '20 尺冷柜', en: '20ft Reefer',
-      l: 5449, w: 2295, h: 2265, payload: 27700, tare: 2800,
-      doorW: 2290, doorH: 2224, note: '冷柜内壁有风道，实际可用宽度和高度更小。'
+      l: 5449, w: 2295, h: 2265, loadLineH: 2165, reefer: true, payload: 27700, tare: 2800,
+      doorW: 2290, doorH: 2224, note: '冷柜内壁有风道与红色装载线（约 2165mm），堆高不宜遮挡回风口。'
     },
     {
       id: '40RF', code: '40RF', name: '40 尺冷柜', en: '40ft Reefer',
-      l: 11583, w: 2295, h: 2250, payload: 26000, tare: 4800,
-      doorW: 2290, doorH: 2224, note: '冷柜内壁有风道，装柜前请以实际箱内尺寸复核。'
+      l: 11583, w: 2295, h: 2250, loadLineH: 2150, reefer: true, payload: 26000, tare: 4800,
+      doorW: 2290, doorH: 2224, note: '冷柜内壁有风道与红色装载线（约 2150mm），装柜前请以实际铭牌复核。'
     },
     {
       id: '20OT', code: '20OT', name: '20 尺开顶柜', en: '20ft Open Top',
-      l: 5898, w: 2352, h: 2340, payload: 28000, tare: 2300,
-      doorW: 2340, doorH: 2280, note: '可吊装超高货物，顶部需盖篷布。'
+      l: 5898, w: 2352, h: 2340, openTop: true, payload: 28000, tare: 2300,
+      doorW: 2340, doorH: 2280, note: '可从顶部吊装超高/超宽货物，顶部需盖篷布。'
     },
     {
       id: '40OT', code: '40OT', name: '40 尺开顶柜', en: '40ft Open Top',
-      l: 12032, w: 2352, h: 2340, payload: 26700, tare: 3800,
-      doorW: 2340, doorH: 2280, note: '可吊装超高货物，顶部需盖篷布。'
+      l: 12032, w: 2352, h: 2340, openTop: true, payload: 26700, tare: 3800,
+      doorW: 2340, doorH: 2280, note: '可从顶部吊装超高/超宽货物，顶部需盖篷布。'
     }
   ];
 

@@ -54,8 +54,11 @@
   function m3(n) { return ((Number(n) || 0) / 1e9).toFixed(1) + ' m³'; }
   function colorFor(index) { return DATA.colors[((index % DATA.colors.length) + DATA.colors.length) % DATA.colors.length]; }
   function layersFor(p) {
-    if (!state.options.allowStack) return 1;
-    return Math.max(1, Math.floor((Number(state.container.h) || 0) / (Number(p.h) || 1)));
+    if (!state.options.allowStack || p.allowStack === false) return 1;
+    var layers = Math.max(1, Math.floor((Number(state.container.h) || 0) / (Number(p.h) || 1)));
+    if (p.maxLayers > 0) layers = Math.min(layers, Math.max(1, Math.round(Number(p.maxLayers))));
+    if (p.maxLoad > 0 && p.weight > 0) layers = Math.min(layers, 1 + Math.floor(p.maxLoad / p.weight + 1e-6));
+    return layers;
   }
   function updateStackNote() {
     var maxLayers = 1;
@@ -102,6 +105,10 @@
         baseH: Math.min(nonNeg(p.baseH, 144), h),
         qty: Math.max(0, Math.round(Number(p.qty) || 0)),
         weight: Math.max(0, Number(p.weight) || 0),
+        allowStack: p.allowStack !== false,
+        allowRotate: p.allowRotate !== false,
+        maxLayers: Math.max(0, Math.round(Number(p.maxLayers) || 0)),
+        maxLoad: Math.max(0, Math.round(Number(p.maxLoad) || 0)),
         fill: !!p.fill,
         color: Number.isFinite(Number(p.color)) ? Number(p.color) % DATA.colors.length : i % DATA.colors.length
       });
@@ -356,6 +363,20 @@
           '<input data-field="code" maxlength="10" value="' + esc(p.code || '') + '" placeholder="如 蓝托 / C1" title="3D 和打印图上显示的简短名称">' +
           '<em>用于 3D / 打印</em>' +
         '</div>' +
+        '<div class="pallet-opts-row">' +
+          '<label class="pallet-check" title="取消勾选表示该规格不可叠放（仅单层）">' +
+            '<input type="checkbox" data-field="allowStack"' + (p.allowStack !== false ? ' checked' : '') + '>可叠' +
+          '</label>' +
+          '<label class="pallet-check" title="取消勾选表示该规格禁止旋转 90°">' +
+            '<input type="checkbox" data-field="allowRotate"' + (p.allowRotate !== false ? ' checked' : '') + '>可转' +
+          '</label>' +
+          '<label class="pallet-mini-num" title="单垛最大层数限制，0 或留空为按柜高自动计算">' +
+            '限层<input type="number" inputmode="numeric" min="0" max="20" step="1" data-field="maxLayers" value="' + (p.maxLayers > 0 ? p.maxLayers : '') + '" placeholder="不限">' +
+          '</label>' +
+          '<label class="pallet-mini-num" title="单托顶面允许承受的最大上层重量(kg)，0 或留空为不限">' +
+            '顶载<input type="number" inputmode="numeric" min="0" step="50" data-field="maxLoad" value="' + (p.maxLoad > 0 ? p.maxLoad : '') + '" placeholder="不限">kg' +
+          '</label>' +
+        '</div>' +
         '<div class="pallet-foot">' +
           (isFill
             ? '<span class="pallet-qty fill-qty">尽量多装</span>'
@@ -372,7 +393,7 @@
     updateStackNote();
   }
 
-  function updatePalletFromCard(card, field, value) {
+  function updatePalletFromCard(card, field, value, checked) {
     var id = card.getAttribute('data-id');
     var p = state.pallets.filter(function (x) { return x.id === id; })[0];
     if (!p) return;
@@ -388,6 +409,14 @@
       p.qty = Math.max(1, Math.round(Number(value) || 1));
     } else if (field === 'weight') {
       p.weight = Math.max(0, Math.round(Number(value) || 0));
+    } else if (field === 'allowStack') {
+      p.allowStack = !!checked;
+    } else if (field === 'allowRotate') {
+      p.allowRotate = !!checked;
+    } else if (field === 'maxLayers') {
+      p.maxLayers = Math.max(0, Math.round(Number(value) || 0));
+    } else if (field === 'maxLoad') {
+      p.maxLoad = Math.max(0, Math.round(Number(value) || 0));
     }
     if (!p.fill && !p.qty) p.qty = 1;
     if (p.presetId) {
@@ -403,7 +432,7 @@
         buildPresetSelect();
       }
     }
-    if (field === 'h') {
+    if (field === 'h' || field === 'allowStack' || field === 'maxLayers' || field === 'maxLoad' || field === 'weight') {
       var layers = layersFor(p);
       var tag = card.querySelector('.pallet-tag');
       if (tag) tag.textContent = (p.fill ? '补柜规格' : '必装') + (layers > 1 ? ' · ' + layers + '层' : '');
@@ -453,6 +482,10 @@
       baseH: Math.min(nonNeg(base.baseH, 144), intVal(base.h, 1100)),
       qty: Math.max(1, intVal(base.qty, 1)),
       weight: Math.max(0, Number(base.weight) || 0),
+      allowStack: base.allowStack !== false,
+      allowRotate: base.allowRotate !== false,
+      maxLayers: Math.max(0, Math.round(Number(base.maxLayers) || 0)),
+      maxLoad: Math.max(0, Math.round(Number(base.maxLoad) || 0)),
       fill: false,
       color: color
     });
@@ -524,7 +557,10 @@
       h: state.container.h,
       payload: state.container.payload,
       doorW: known ? known.doorW : (state.container.doorW || 0),
-      doorH: known ? known.doorH : (state.container.doorH || 0)
+      doorH: known ? known.doorH : (state.container.doorH || 0),
+      openTop: known ? !!known.openTop : false,
+      reefer: known ? !!known.reefer : false,
+      loadLineH: known ? (known.loadLineH || 0) : 0
     };
   }
 
@@ -736,6 +772,16 @@
     res.floorUsed = used;
     res.floorUtil = res.floorArea ? used / res.floorArea : 0;
     res.manual = true;
+    if (window.CL_SOLVER && typeof window.CL_SOLVER.analyzePlacements === 'function') {
+      var m = window.CL_SOLVER.analyzePlacements(res.container || currentContainer(), res.placements, { doorGap: res.doorGap });
+      res.totalWeight = m.totalWeight;
+      res.frontHalfWeight = m.frontHalfWeight;
+      res.backHalfWeight = m.backHalfWeight;
+      res.cog = m.cog;
+      res.cogOffset = m.cogOffset;
+      res.clearanceWarnings = m.clearanceWarnings;
+      res.clearanceOk = m.clearanceOk;
+    }
     updateStageCopy();
     if (final) {
       renderResult();
@@ -839,14 +885,15 @@
     $('#clearanceCount').textContent = clearance.length ? (clearance.length + ' 项需复核') : '';
     $('#clearanceList').innerHTML = clearance.map(function (w) { return '<li>' + esc(w.text) + '</li>'; }).join('');
 
-    var badge = res.mixedStacks ? '混合叠放方案' : (res.strategy === 'min-stack' ? '最少叠放' : ((!res.stackingUsed && res.allowStack) ? '单层优先' : (res.optimalByArea ? '达到面积上限' : (res.fillType ? '条带搜索方案' : '叠放排布'))));
+    var badge = res.mixedStacks ? '混合叠放方案' : (res.strategy === 'min-stack' ? '最少叠放' : ((!res.stackingUsed && res.allowStack) ? '单层优先' : (res.optimalByWeight && !res.optimalByArea ? '达到载重上限' : (res.optimalByArea ? '达到面积上限' : (res.fillType ? '条带搜索方案' : '叠放排布')))));
     $('#resultBadge').textContent = badge;
-    $('#resultBadge').classList.toggle('warn', !res.optimalByArea && !!res.fillType);
+    $('#resultBadge').classList.toggle('warn', !res.optimalByArea && !res.optimalByWeight && !!res.fillType);
 
     var verdict;
     if (res.fillType) {
       verdict = '<strong>' + res.requiredCount + ' 托必装全部装入</strong>；补柜规格 ' + esc(fillName) + ' 还能加 <strong>' + res.fillCount + ' 托</strong>，总装载 <strong>' + res.totalCount + ' 托</strong>（' + res.stackCount + ' 个垛位）' + (res.mixedStacks ? '，含 ' + res.mixedStacks + ' 个混合叠放垛位' : '') + '。';
       if (res.optimalByArea) verdict += ' 补柜数量已达到按柜底面积计算的理论上限。';
+      else if (res.optimalByWeight) verdict += ' 补柜数量已达到箱型最大载重上限。';
     } else {
       verdict = '<strong>' + res.requiredCount + ' 托必装全部装入</strong>，共 ' + res.stackCount + ' 个垛位' + (res.mixedStacks ? '（含混合叠放）' : (res.strategy === 'min-stack' ? '（最少叠放）' : (res.stackingUsed ? '（叠放）' : '（单层）'))) + '。';
     }
@@ -854,7 +901,9 @@
 
     $('#statVolume').textContent = m3(res.volume);
     $('#statFloor').textContent = m2(res.floorUsed) + ' / ' + m2(res.floorArea);
-    $('#statWeight').textContent = res.weightKnown ? fmt(res.totalWeight) + ' kg' : '未填写';
+    $('#statWeight').textContent = res.weightKnown
+      ? (fmt(res.totalWeight) + (res.payload ? (' / ' + fmt(res.payload) + ' kg') : ' kg'))
+      : '未填写';
     $('#statHeight').textContent = res.maxHeight + ' / ' + c.h + ' mm';
 
     renderTypeList();
@@ -915,8 +964,10 @@
     if (res.fillType) {
       if (res.optimalByArea) {
         notes.push('补柜 <strong>' + res.fillCount + ' 托</strong> 已达到面积理论上限；在当前叠放模型下，数量已经最优。');
+      } else if (res.optimalByWeight) {
+        notes.push('补柜 <strong>' + res.fillCount + ' 托</strong> 已达到箱型载重上限（' + fmt(res.payload) + ' kg）；按空间理论上限最多为 ' + res.fillUpperBoundByArea + ' 托。');
       } else {
-        notes.push('补柜 <strong>' + res.fillCount + ' 托</strong>；按面积估算的上限为 ' + res.fillUpperBound + ' 托，受柜底长宽组合限制，实际可能低于该上限。');
+        notes.push('补柜 <strong>' + res.fillCount + ' 托</strong>；综合空间与载重估算上限为 ' + res.fillUpperBound + ' 托，受长宽组合限制，实际可能低于该上限。');
       }
     }
     notes.push('共 <strong>' + res.stackCount + ' 个垛位</strong>，必装参与 ' + res.requiredStacks + ' 垛 + 补柜纯垛 ' + res.fillStacks + ' 垛' + (res.mixedStacks ? '；其中混合叠放 ' + res.mixedStacks + ' 垛' : '') + '。');
@@ -1096,20 +1147,23 @@
       var el = e.target;
       if (!el || !el.getAttribute) return;
       var field = el.getAttribute('data-field');
-      if (!field) return;
+      if (!field || el.type === 'checkbox') return;
       var card = el.closest('.pallet-card');
       if (!card) return;
-      updatePalletFromCard(card, field, el.value);
-      if (field === 'name' || field === 'code' || field === 'l' || field === 'w' || field === 'h' || field === 'qty' || field === 'weight') {
-        // 不在输入过程中重建列表，避免光标丢失；计算结果会更新右侧。
+      updatePalletFromCard(card, field, el.value, el.checked);
+      if (field === 'name' || field === 'code' || field === 'l' || field === 'w' || field === 'h' || field === 'qty' || field === 'weight' || field === 'maxLayers' || field === 'maxLoad') {
         scheduleCalc();
       }
     });
     $('#palletList').addEventListener('change', function (e) {
       var el = e.target;
-      if (el && el.getAttribute && el.getAttribute('data-field') === 'name') {
-        var card = el.closest('.pallet-card');
-        if (card) updatePalletFromCard(card, 'name', el.value);
+      if (!el || !el.getAttribute) return;
+      var field = el.getAttribute('data-field');
+      if (!field) return;
+      var card = el.closest('.pallet-card');
+      if (!card) return;
+      if (el.type === 'checkbox' || field === 'name') {
+        updatePalletFromCard(card, field, el.value, el.checked);
         scheduleCalc();
       }
     });
