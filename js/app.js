@@ -1057,15 +1057,45 @@
     document.head.appendChild(script);
   }
 
+  function deliverPdfBlob(blob, filename) {
+    try {
+      var file = new File([blob], filename, { type: 'application/pdf' });
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '')) {
+        navigator.share({
+          files: [file],
+          title: filename
+        }).catch(function (err) {
+          if (err && err.name === 'AbortError') return;
+          triggerDownloadBlob(blob, filename);
+        });
+        return;
+      }
+    } catch (e) { /* fallback to anchor download */ }
+    triggerDownloadBlob(blob, filename);
+  }
+
+  function triggerDownloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+      if (a.parentNode) a.parentNode.removeChild(a);
+    }, 2000);
+  }
+
   function savePdfNow() {
     if (!state.layout || !state.layout.ok) {
       toast('当前没有可导出的装载方案');
       return;
     }
     if (isInAppWebView()) {
-      toast('微信/内置浏览器可能拦截文件下载，如未弹出保存请点右上角「···」用默认浏览器打开');
+      toast('微信/内置浏览器可能拦截文件保存，如未弹出请点右上角「···」用 Safari / 默认浏览器打开');
     } else {
-      toast('正在生成 A4 PDF 装箱图，请稍候…');
+      toast('正在生成单页 A4 PDF 装箱图…');
     }
 
     var btns = [$('#btnSavePdf'), $('#btnSavePdfTop')].filter(Boolean);
@@ -1074,7 +1104,7 @@
     ensureHtml2Pdf(function (err, html2pdfFn) {
       if (err) {
         btns.forEach(function (b) { b.disabled = false; });
-        toast(err.message + '，可尝试使用系统浏览器打印另存为 PDF');
+        toast(err.message + '，可尝试使用 Safari 分享 → 打印 → 存为 PDF');
         return;
       }
 
@@ -1086,6 +1116,7 @@
         return;
       }
 
+      // 在视口左上角放置固定 794px (A4 宽度比例) 不可见离屏层，避免 iOS 视口窄导致的重排与滚动偏移截断
       var host = document.createElement('div');
       host.className = 'pdf-export-host';
       var clone = srcSheet.cloneNode(true);
@@ -1100,38 +1131,66 @@
         String(d.getDate()).padStart(2, '0');
       var filename = 'Container-Loader-' + code + '-' + ymd + '.pdf';
 
-      var opt = {
-        margin: [25.4, 31.7, 20, 31.7],
-        filename: filename,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 2.5,
-          useCORS: true,
-          backgroundColor: '#ffffff',
-          logging: false
-        },
-        jsPDF: {
-          unit: 'mm',
-          format: 'a4',
-          orientation: 'portrait'
-        },
-        pagebreak: { mode: ['avoid-all', 'css'] }
-      };
-
       setTimeout(function () {
-        html2pdfFn().set(opt).from(clone).save()
-          .then(function () {
+        var opt = {
+          margin: 0,
+          filename: filename,
+          image: { type: 'jpeg', quality: 0.96 },
+          html2canvas: {
+            scale: 2,
+            useCORS: true,
+            backgroundColor: '#ffffff',
+            scrollX: 0,
+            scrollY: 0,
+            windowWidth: 900,
+            logging: false
+          },
+          jsPDF: {
+            unit: 'mm',
+            format: 'a4',
+            orientation: 'portrait'
+          }
+        };
+
+        // 先用 html2pdf 生成高清 canvas，再按单页 A4 精确等比排版，彻底杜绝自动分页切成 3 页
+        html2pdfFn().set(opt).from(clone).toCanvas().get('canvas').then(function (canvas) {
+          return html2pdfFn().set(opt).from(clone).toPdf().get('pdf').then(function (pdf) {
+            var pageW = 210;
+            var pageH = 297;
+            var marginTop = 25.4;
+            var marginBottom = 16.0;
+            var marginLR = 31.7;
+
+            var maxW = pageW - marginLR * 2;       // 146.6 mm
+            var maxH = pageH - marginTop - marginBottom; // 255.6 mm
+
+            var imgRatio = canvas.height / canvas.width;
+            var renderW = maxW;
+            var renderH = renderW * imgRatio;
+
+            if (renderH > maxH) {
+              renderH = maxH;
+              renderW = renderH / imgRatio;
+            }
+            var offsetX = (pageW - renderW) / 2;
+            var offsetY = marginTop;
+
+            var imgData = canvas.toDataURL('image/jpeg', 0.96);
+            pdf.addImage(imgData, 'JPEG', offsetX, offsetY, renderW, renderH, undefined, 'FAST');
+
+            var blob = pdf.output('blob');
             if (host.parentNode) host.parentNode.removeChild(host);
             btns.forEach(function (b) { b.disabled = false; });
-            toast('PDF 已生成：' + filename);
-          })
-          .catch(function (e) {
-            if (host.parentNode) host.parentNode.removeChild(host);
-            btns.forEach(function (b) { b.disabled = false; });
-            console.error(e);
-            toast('PDF 生成失败，请尝试在手机浏览器菜单中选择「分享 → 打印 → 存为 PDF」');
+            deliverPdfBlob(blob, filename);
+            toast('单页 A4 PDF 已生成');
           });
-      }, 120);
+        }).catch(function (e) {
+          if (host.parentNode) host.parentNode.removeChild(host);
+          btns.forEach(function (b) { b.disabled = false; });
+          console.error(e);
+          toast('PDF 生成失败，请尝试在 Safari 菜单中选择「分享 → 打印 → 存为 PDF」');
+        });
+      }, 150);
     });
   }
 

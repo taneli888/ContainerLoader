@@ -1613,17 +1613,25 @@ input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
   font-weight: 600;
 }
 
-/* 离屏 PDF 生成容器：模拟 A4 去除左右 31.7mm 边距后的可用版心宽度 (210 - 63.4 = 146.6mm) */
+/* 离屏 PDF 生成容器：锁定桌面端标准 A4 版心宽度 (554px ≈ 146.6mm @ 96dpi)，防止 iPhone 窄屏挤压与分页 */
 .pdf-export-host {
   position: fixed;
-  left: -99999px;
+  left: 0;
   top: 0;
-  width: 146.6mm;
+  width: 554px;
+  min-width: 554px;
+  max-width: 554px;
   background: #fff;
   color: #111;
-  font-size: 9.5pt;
-  z-index: -1;
+  font-size: 12.6px;
+  opacity: 0;
+  z-index: -999;
   pointer-events: none;
+  overflow: visible;
+}
+.pdf-export-host .print-sheet {
+  width: 554px !important;
+  max-width: 554px !important;
 }
 
 /* ------------------------------- 打印 ------------------------------- */
